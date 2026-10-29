@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -148,4 +149,19 @@ test("when the server offers agents, Send asks which one and says where the note
   await main.click();
   await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to API agent.");
   expect((await (await request.get("http://localhost:5197/delivered")).json()).at(-1).prompt).toContain("Second note");
+});
+
+test("the standalone server answers only on this machine and only to local host names", async () => {
+  const lan = Object.values(os.networkInterfaces())
+    .flat()
+    .find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+  if (lan) await expect(fetch(`http://${lan}:5192/__annotate/feedback`)).rejects.toThrow();
+  const get = (host: string) =>
+    new Promise<number>((resolve, reject) =>
+      http.get({ host: "127.0.0.1", port: 5192, path: "/__annotate/feedback", headers: { host } }, (r) => resolve(r.statusCode!)).on("error", reject),
+    );
+  expect(await get("localhost:5192")).toBe(200);
+  expect(await get("[::1]:5192")).toBe(200);
+  expect(await get("app.devbox.example:5192")).toBe(200);
+  expect(await get("attacker.example:5192")).toBe(403);
 });

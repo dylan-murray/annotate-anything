@@ -2,6 +2,7 @@ import http from "node:http";
 import { createCore, isLocalOrigin } from "./core";
 import { nodeRequest } from "./node";
 import { clientBundle } from "./client-file";
+import { LOCAL_HOST } from "../local";
 
 export interface ServeOptions {
   port?: number;
@@ -33,8 +34,23 @@ function page(base: string): string {
 // the client from here and talk to it cross-origin.
 export function startServer(options: ServeOptions = {}): http.Server {
   const origins = new Set(options.origins ?? []);
+  const named = new Set([...origins].map((o) => new URL(o).hostname));
   const core = createCore({ dir: options.dir, command: options.command, enabled: true, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
-  const server = http.createServer((req, res) => {
+  // A request must name this machine (or an --origin host). Any other Host is a site that
+  // pointed its own domain at 127.0.0.1 (DNS rebinding) to look same-origin.
+  const knownHost = (host = "") => {
+    try {
+      const name = new URL(`http://${host}`).hostname;
+      return LOCAL_HOST.test(name) || named.has(name);
+    } catch {
+      return false;
+    }
+  };
+  const handler: http.RequestListener = (req, res) => {
+    if (!knownHost(req.headers.host)) {
+      res.writeHead(403, { "Content-Type": "text/plain" }).end("annotate-anything only answers requests addressed to this machine");
+      return;
+    }
     core
       .handle(nodeRequest(req))
       .then((out) => {
@@ -51,7 +67,14 @@ export function startServer(options: ServeOptions = {}): http.Server {
       .catch((e) => {
         res.writeHead(500, { "Content-Type": "text/plain" }).end(String(e));
       });
-  });
-  server.listen(options.port ?? 4319);
+  };
+  // Loopback only: other machines on the network can't reach the notes. Browsers may try
+  // ::1 for localhost first, so listen there too when the machine has IPv6.
+  const port = options.port ?? 4319;
+  const server = http.createServer(handler);
+  const v6 = http.createServer(handler).on("error", () => {});
+  server.once("listening", () => v6.listen(port, "::1"));
+  server.once("close", () => v6.close());
+  server.listen(port, "127.0.0.1");
   return server;
 }
