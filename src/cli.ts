@@ -106,7 +106,9 @@ function main(argv: string[]): number | Promise<number> {
 
 function serveStandalone(dir: string | undefined, port: number, origins: string[]): Promise<number> {
   const folder = path.resolve(dir ?? ".annotations");
-  const server = startServer({ dir: folder, port, origins });
+  const self = process.argv[1] ?? "";
+  const command = !self || /node_modules|_npx/.test(self) ? "npx annotate-anything" : `node ${/\s/.test(self) ? JSON.stringify(self) : self}`;
+  const server = startServer({ dir: folder, port, origins, command });
   return new Promise((resolve) => {
     server.on("error", (e) => {
       console.error(`Could not start on port ${port}: ${(e as Error).message}`);

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { FileStore, MAX_NOTES } from "./store";
-import type { Note, Status, Submission } from "../types";
+import type { Note, Status, Submission, Target } from "../types";
 import { LOCAL_HOST } from "../local";
 
 export interface Delivery {
@@ -14,6 +14,29 @@ export interface SubmitBatch {
   submission: Submission;
   file: string;
   root: string;
+  // The agent picked in the browser, when targets are offered.
+  target?: string;
+  agent?: string;
+  // Ready-to-send instructions for an agent: the notes and how to report back.
+  prompt: string;
+}
+
+const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+export function handoff(batch: Omit<SubmitBatch, "prompt">, command = "npx annotate-anything"): string {
+  const dir = quote(path.dirname(batch.file));
+  const as = batch.agent ? ` --agent ${quote(batch.agent)}` : "";
+  const lines = [...batch.notes]
+    .sort((a, b) => a.n - b.n)
+    .map((n) => `- #${n.n} ${n.kind} on ${n.route} (${n.selector || n.tag}${n.targetText ? ` "${n.targetText.slice(0, 80)}"` : ""}): ${n.comment.replace(/\s+/g, " ")}`);
+  const head = `UI notes from annotate-anything on ${batch.submission.url || batch.submission.route}:`;
+  const tail =
+    `\nFull details (selectors, element text, boxes, viewport) are in ${batch.file}.` +
+    ` For each note, run \`${command} status <n> working --dir ${dir}${as}\`, make the change, verify it, then` +
+    ` \`${command} status <n> resolved --reply "<what changed>" --dir ${dir}${as}\`. Leave a note open and reply why if you change nothing.`;
+  let body = lines.join("\n");
+  if ((head + body + tail).length > 5800) body = body.slice(0, 5800 - head.length - tail.length - 20) + "\n- …";
+  return `${head}\n${body}${tail}`;
 }
 
 export interface CoreOptions {
@@ -23,6 +46,10 @@ export interface CoreOptions {
   // it went and the page says so; ok means the receiver has the notes. Errors are
   // reported to the page, never thrown.
   onSubmit?: (batch: SubmitBatch) => Delivery | void | Promise<Delivery | void>;
+  // Running agents the person can send to; the chosen id reaches onSubmit as batch.target.
+  targets?: () => Target[] | Promise<Target[]>;
+  // How agents run the CLI, for the handoff prompt.
+  command?: string;
   // Other origins allowed to call the API from a browser (the standalone server
   // allows any local origin). Same-origin requests are always allowed.
   allowOrigin?: (origin: string) => boolean;
@@ -102,6 +129,7 @@ export function createCore(options: CoreOptions = {}) {
       return { script: `window.__ANNOTATE_ANYTHING__=Object.assign(${config},window.__ANNOTATE_ANYTHING__||{});\n${bundle}` };
     }
     if (route === "/feedback" && req.method === "GET") return { data: state() };
+    if (route === "/targets" && req.method === "GET") return { data: { targets: (await options.targets?.()) ?? [] } };
     if (req.method !== "POST") throw new HttpError(405, "Method not allowed");
     if (!String(req.header("content-type") ?? "").includes("application/json")) throw new HttpError(415, "Use Content-Type: application/json");
     if (route === "/feedback") {
@@ -115,17 +143,29 @@ export function createCore(options: CoreOptions = {}) {
     if (route === "/feedback/submit") {
       const b = await json(req, SMALL_LIMIT);
       const ids = Array.isArray(b.noteIds) ? b.noteIds : [];
+      const target = typeof b.target === "string" && b.target ? b.target.slice(0, 200) : undefined;
+      const agent = target && typeof b.agent === "string" ? b.agent.slice(0, 120) : undefined;
       const result = store.submit(ids, b);
       let delivery: Delivery | undefined;
-      if (result.submission && options.onSubmit) {
-        try {
-          delivery = (await options.onSubmit({ notes: result.notes, submission: result.submission, file: store.feedback, root })) ?? undefined;
-        } catch (e) {
-          delivery = { to: "The onSubmit hook", ok: false, detail: e instanceof Error ? e.message : String(e) };
+      let prompt: string | undefined;
+      if (result.submission) {
+        const batch = { notes: result.notes, submission: result.submission, file: store.feedback, root, target, agent };
+        prompt = handoff(batch, options.command);
+        if (options.onSubmit) {
+          try {
+            delivery = (await options.onSubmit({ ...batch, prompt })) ?? undefined;
+          } catch (e) {
+            delivery = { to: "The onSubmit hook", ok: false, detail: e instanceof Error ? e.message : String(e) };
+          }
         }
       }
-      if (delivery?.ok) store.pickUp(result.submission!.noteIds);
-      return { data: { submission: result.submission, sent: result.sent, watching: store.watching(), agent: store.agent(), delivery } };
+      if (delivery?.ok) {
+        store.pickUp(result.submission!.noteIds);
+        if (agent) store.setAgent(agent);
+      }
+      // With a target and no hook here, a server in front of this one delivers; it gets the prompt.
+      const forward = target && !options.onSubmit ? { handoff: prompt } : {};
+      return { data: { submission: result.submission, sent: result.sent, watching: store.watching(), agent: store.agent(), delivery, ...forward } };
     }
     if (route === "/feedback/status") {
       const b = await json(req, SMALL_LIMIT);

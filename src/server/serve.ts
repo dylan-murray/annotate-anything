@@ -7,6 +7,7 @@ export interface ServeOptions {
   port?: number;
   dir?: string;
   origins?: string[];
+  command?: string;
 }
 
 export function bookmarklet(base: string): string {
@@ -32,7 +33,7 @@ function page(base: string): string {
 // the client from here and talk to it cross-origin.
 export function startServer(options: ServeOptions = {}): http.Server {
   const origins = new Set(options.origins ?? []);
-  const core = createCore({ dir: options.dir, enabled: true, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
+  const core = createCore({ dir: options.dir, command: options.command, enabled: true, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
   const server = http.createServer((req, res) => {
     core
       .handle(nodeRequest(req))

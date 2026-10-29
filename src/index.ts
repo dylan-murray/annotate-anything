@@ -3,7 +3,7 @@ import { LOCAL_HOST } from "./local";
 
 export type { Options } from "./annotator";
 export type { Transport, PageInfo } from "./transport";
-export type { Note, Submission, Status, Kind, FeedbackState, SubmitResult } from "./types";
+export type { Note, Submission, Status, Kind, FeedbackState, SubmitResult, Target } from "./types";
 export { http, clipboard, local, markdown } from "./transport";
 
 export interface AnnotateOptions extends Options {

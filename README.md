@@ -138,6 +138,23 @@ annotateAnything({
 })
 ```
 
+Apps that run several agents can let the person pick one. Return them from
+`targets`, and Send opens a "Send to" list; the chosen id reaches `onSubmit`
+as `batch.target`, with `batch.prompt` ready to hand over (the notes, plus the
+commands that report progress back to this notes folder):
+
+```js
+annotateAnything({
+  targets: () => mySessions().map((s) => ({ id: s.id, label: s.name, detail: s.repo })),
+  onSubmit: ({ target, prompt }) => mySessions.send(target, prompt).then(() => ({ to: "your session", ok: true })),
+})
+```
+
+A server in front of the notes server can do the same: answer
+`GET <base>/targets` itself, and deliver the `handoff` that `/feedback/submit`
+returns when the request names a target. Pass `headers` to `annotate()` if
+that server wants an auth header.
+
 No server at all: `annotate({ transport: "clipboard" })` turns Send into Copy,
 which puts the notes on your clipboard as a prompt.
 

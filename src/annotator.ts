@@ -2,11 +2,12 @@ import { containing, cssPath, elementAt, find, inDialog, labelFor, place, rectOf
 import { ICON } from "./icons";
 import { css } from "./styles";
 import { clipboard, http, local, type PageInfo, type Transport } from "./transport";
-import type { Box, FeedbackState, Kind, Mode, Note, Status } from "./types";
+import type { Box, FeedbackState, Kind, Mode, Note, Status, Target } from "./types";
 
 export interface Options {
   transport?: "http" | "clipboard" | "local" | Transport;
   endpoint?: string;
+  headers?: Record<string, string>;
   scope?: string;
   agentName?: string;
   watchCommand?: string;
@@ -72,7 +73,7 @@ export class Annotator {
   private launcher: HTMLElement;
   private transport: Transport;
   private attrs: string[];
-  private keys: { notes: string; pos: string; marks: string };
+  private keys: { notes: string; pos: string; marks: string; target: string };
 
   private notes: Note[] = [];
   private deleted: string[] = [];
@@ -85,6 +86,8 @@ export class Annotator {
   private mode: Mode | null = null;
   private listOpen = false;
   private confirming = false;
+  private picking: Target[] | null = null;
+  private offers = false;
   private panel: Panel | null = null;
   private drawing: { x0: number; y0: number; x1: number; y1: number } | null = null;
   private msg: string | null = null;
@@ -116,10 +119,10 @@ export class Annotator {
 
   constructor(private options: Options = {}) {
     const scope = options.scope ?? "default";
-    this.keys = { notes: `annotate-anything:${scope}:notes`, pos: "annotate-anything:launcher", marks: "annotate-anything:marks" };
+    this.keys = { notes: `annotate-anything:${scope}:notes`, pos: "annotate-anything:launcher", marks: "annotate-anything:marks", target: `annotate-anything:${scope}:target` };
     this.attrs = options.stableAttributes ?? ["data-testid", "data-test", "data-qa", "data-cy"];
     const t = options.transport ?? (options.endpoint ? "http" : "local");
-    this.transport = typeof t === "object" ? t : t === "http" ? http(options.endpoint ?? "/__annotate") : t === "clipboard" ? clipboard() : local();
+    this.transport = typeof t === "object" ? t : t === "http" ? http(options.endpoint ?? "/__annotate", options.headers) : t === "clipboard" ? clipboard() : local();
     const saved = read<{ notes?: Note[]; deleted?: string[] }>(this.keys.notes, {});
     this.notes = Array.isArray(saved.notes) ? saved.notes : [];
     this.deleted = Array.isArray(saved.deleted) ? saved.deleted : [];
@@ -437,7 +440,10 @@ export class Annotator {
     e.preventDefault();
     e.stopPropagation();
     if (this.panel) this.dismissPanel();
-    else if (this.confirming) {
+    else if (this.picking) {
+      this.picking = null;
+      this.renderBar();
+    } else if (this.confirming) {
       this.confirming = false;
       this.renderBar();
     } else if (this.listOpen) {
@@ -577,7 +583,17 @@ export class Annotator {
     if (t === "local") return "No agent connection · notes stay in this browser";
     if (t === "clipboard") return "Copy mode · Copy puts your notes on the clipboard to paste into your agent";
     if (this.lastSent) return `Sent at ${clock(this.lastSent)}`;
-    return this.watching ? `Connected · ${this.who()} is listening` : `Connected · no agent attached yet · ask yours to run ${this.watchCmd()}`;
+    if (this.watching) return `Connected · ${this.who()} is listening`;
+    return this.offers ? "Connected · Send lets you pick an agent" : `Connected · no agent attached yet · ask yours to run ${this.watchCmd()}`;
+  }
+
+  // Sent, but no agent was listening and none was picked.
+  private unheard(n: Note) {
+    return n.status === "sent" && !n.pickedUpAt && this.transport.kind === "http" && !this.watching && !this.delivered;
+  }
+
+  private noAgent() {
+    return this.offers ? "no agent has it · open the note to send it to one" : `no agent attached · ask yours to run ${this.watchCmd()}`;
   }
 
   private watchCmd() {
@@ -598,7 +614,7 @@ export class Annotator {
     const at = sent.map((n) => n.sentAt ?? "").sort().at(-1);
     return this.watching || this.delivered
       ? `Sent to ${this.who()} at ${clock(at)} · waiting for ${this.who()} to pick it up`
-      : `Sent at ${clock(at)} · no agent attached · ask yours to run ${this.watchCmd()}`;
+      : `Sent at ${clock(at)} · ${this.noAgent()}`;
   }
 
   private agentName(): string | undefined {
@@ -626,7 +642,21 @@ export class Annotator {
     const tool = (k: Mode) =>
       `<button type="button" class="tool${this.mode === k ? " on" : ""}" data-mode="${k}" aria-pressed="${this.mode === k}" title="${TOOL_TITLE[k]}">${ICON[k]}${KIND_LABEL[k]}</button>`;
     const sorted = [...this.notes].sort((a, b) => a.n - b.n);
-    const list = this.listOpen
+    const picker = this.picking
+      ? `<div class="phead">Send to</div><ul class="list pick" aria-label="Send to">${
+          this.picking.length
+            ? this.picking
+                .map(
+                  (t) =>
+                    `<li data-target="${esc(t.id)}" tabindex="0"><span class="ltext">${esc(t.label)}</span>${t.detail ? `<span class="lstate">${esc(t.detail)}</span>` : ""}</li>`,
+                )
+                .join("")
+            : '<li class="empty">Loading agents…</li>'
+        }</ul>`
+      : "";
+    const list = picker
+      ? picker
+      : this.listOpen
       ? `<ul class="list" aria-label="Notes">${
           sorted.length
             ? sorted
@@ -726,6 +756,14 @@ export class Annotator {
   private toggleOpen() {
     if (this.panel && this.isDirty()) return this.nudge();
     this.open = !this.open;
+    if (this.open && this.transport.targets)
+      this.transport
+        .targets()
+        .then((t) => {
+          this.offers = t.length > 0;
+          this.renderBar();
+        })
+        .catch(() => {});
     if (!this.open) {
       this.mode = null;
       this.listOpen = false;
@@ -792,8 +830,10 @@ export class Annotator {
           : n.status === "sent"
             ? n.pickedUpAt
               ? `${this.who(true)} picked this up at ${clock(n.pickedUpAt)}.`
-              : this.transport.kind === "http" && !this.watching && !this.delivered
-                ? `Sent at ${clock(n.sentAt)}. No agent is attached yet; ask yours to run ${this.watchCmd()}`
+              : this.unheard(n)
+                ? this.offers
+                  ? `Sent at ${clock(n.sentAt)}. No agent has it yet.`
+                  : `Sent at ${clock(n.sentAt)}. No agent is attached yet; ask yours to run ${this.watchCmd()}`
                 : `Sent to ${this.who()} at ${clock(n.sentAt)}, waiting for ${this.who()} to pick it up.`
             : "";
       this.panelEl.innerHTML =
@@ -802,7 +842,11 @@ export class Annotator {
         (n.reply && n.status === "resolved" ? `<div class="reply"><b>${esc(this.agentName() ?? "Agent")}</b>${esc(n.reply)}</div>` : "") +
         (progress ? `<p class="waiting" role="status"><i class="spinner"></i><span>${esc(progress)}</span></p>` : "") +
         `<div class="foot"><button type="button" class="btn ghost danger" data-act="delete">Delete</button><span class="hint"></span>${
-          n.status === "resolved" ? '<button type="button" class="btn" data-act="reopen">Reopen</button>' : '<button type="button" class="btn" data-act="done">Mark done</button>'
+          n.status === "resolved"
+            ? '<button type="button" class="btn" data-act="reopen">Reopen</button>'
+            : this.offers && this.unheard(n)
+              ? '<button type="button" class="btn primary" data-act="resend">Send to an agent</button>'
+              : '<button type="button" class="btn" data-act="done">Mark done</button>'
         }</div>`;
     }
     this.panelEl.hidden = false;
@@ -896,6 +940,12 @@ export class Annotator {
       return;
     }
     if (!note) return;
+    if (a === "resend") {
+      this.closePanel();
+      this.setStatus(note, "open");
+      void this.pick();
+      return;
+    }
     if (a === "done" || a === "reopen") {
       this.setStatus(note, a === "done" ? "resolved" : "open");
       if (a === "reopen") this.openPanel(note, false);
@@ -916,7 +966,33 @@ export class Annotator {
     setTimeout(() => this.openPanel(n, false), el ? 350 : 0);
   }
 
-  private async send() {
+  // Hosts that run several agents list them; the person picks one, as in a chat app's share sheet.
+  private async pick() {
+    if (this.picking) {
+      this.picking = null;
+      return this.renderBar();
+    }
+    if (!this.transport.targets) return this.send();
+    this.listOpen = this.confirming = false;
+    this.picking = [];
+    this.renderBar();
+    let targets: Target[] = [];
+    try {
+      targets = await this.transport.targets();
+    } catch {}
+    if (!this.picking) return;
+    this.offers = targets.length > 0;
+    if (!targets.length) {
+      this.picking = null;
+      return this.send();
+    }
+    const last = read<string>(this.keys.target, "");
+    this.picking = [...targets].sort((a, b) => Number(b.id === last) - Number(a.id === last));
+    this.renderBar();
+    this.bar.querySelector<HTMLElement>("li[data-target]")?.focus();
+  }
+
+  private async send(target?: Target) {
     if (this.isDirty()) this.commitPanel();
     const notes = this.unsent();
     if (!notes.length || this.busy) return;
@@ -924,7 +1000,7 @@ export class Annotator {
     this.render();
     try {
       if (this.transport.kind === "http") await this.flush();
-      const res = await this.transport.submit(notes, this.page());
+      const res = await this.transport.submit(notes, this.page(), target);
       this.busy = false;
       if (this.transport.kind === "clipboard") {
         this.flash(`Copied ${plural(notes.length, "note")} to the clipboard. Paste them into your agent.`);
@@ -941,7 +1017,8 @@ export class Annotator {
         this.delivered = !!res.delivery?.ok;
         if (res.agent) this.agentFromServer = res.agent;
         this.save();
-        const via = res.delivery ? (res.delivery.ok ? ` to ${res.delivery.to}` : `. ${res.delivery.to} didn't take it: ${res.delivery.detail ?? "unknown error"}`) : "";
+        const d = res.delivery;
+        const via = d ? (d.ok ? ` to ${d.to}${d.detail ? ` (${d.detail})` : ""}` : `. ${d.to} didn't take it: ${d.detail ?? "unknown error"}`) : "";
         this.flash(
           res.delivery?.ok || res.watching
             ? `Sent ${plural(res.sent, "note")}${via || ` to ${this.who()}`}.`
@@ -1037,12 +1114,21 @@ export class Annotator {
     });
 
     this.bar.addEventListener("click", (e) => {
-      const b = (e.target as Element).closest<HTMLElement>("button,li[data-note]");
+      const b = (e.target as Element).closest<HTMLElement>("button,li[data-note],li[data-target]");
       if (!b || (b as HTMLButtonElement).disabled || !this.bar.contains(b)) return;
       if (b.dataset.mode) return this.setMode(b.dataset.mode as Mode);
       if (b.dataset.note) {
         const n = this.notes.find((x) => x.id === b.dataset.note);
         if (n) void this.focusNote(n);
+        return;
+      }
+      if (b.dataset.target !== undefined) {
+        const t = this.picking?.find((x) => x.id === b.dataset.target);
+        this.picking = null;
+        if (t) {
+          write(this.keys.target, t.id);
+          void this.send(t);
+        } else this.renderBar();
         return;
       }
       const a = b.dataset.act;
@@ -1072,10 +1158,10 @@ export class Annotator {
         if (this.panel) this.closePanel();
         this.remove(all);
         this.flash(`Cleared ${plural(all.length, "note")}.`);
-      } else if (a === "send") void this.send();
+      } else if (a === "send") void this.pick();
     });
     this.bar.addEventListener("keydown", (e) => {
-      const li = (e.target as Element).closest<HTMLElement>("li[data-note]");
+      const li = (e.target as Element).closest<HTMLElement>("li[data-note],li[data-target]");
       if (li && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
         li.click();

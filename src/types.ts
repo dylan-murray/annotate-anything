@@ -54,6 +54,13 @@ export interface FeedbackState {
   agent?: string;
 }
 
+// A running agent the host app can deliver notes to, offered when Send is pressed.
+export interface Target {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
 export interface SubmitResult {
   submission?: Submission;
   sent: number;

@@ -1,4 +1,4 @@
-import type { FeedbackState, Note, Status, SubmitResult } from "./types";
+import type { FeedbackState, Note, Status, SubmitResult, Target } from "./types";
 
 export interface PageInfo {
   route: string;
@@ -12,16 +12,17 @@ export interface Transport {
   sends: boolean;
   pull(): Promise<FeedbackState>;
   push(notes: Note[], deleted: string[]): Promise<FeedbackState>;
-  submit(notes: Note[], page: PageInfo): Promise<SubmitResult>;
+  submit(notes: Note[], page: PageInfo, target?: Target): Promise<SubmitResult>;
   status(ids: string[], status: Status): Promise<void>;
+  targets?(): Promise<Target[]>;
 }
 
-export function http(endpoint: string): Transport {
+export function http(endpoint: string, extra: Record<string, string> = {}): Transport {
   const base = endpoint.replace(/\/$/, "");
   async function call<T>(path: string, body?: unknown): Promise<T> {
     const res = await fetch(base + path, {
       method: body === undefined ? "GET" : "POST",
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      headers: body === undefined ? extra : { ...extra, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
@@ -33,10 +34,12 @@ export function http(endpoint: string): Transport {
     sends: true,
     pull: () => call<FeedbackState>("/feedback"),
     push: (notes, deleted) => call<FeedbackState>("/feedback", { notes, deleted }),
-    submit: (notes, page) => call<SubmitResult>("/feedback/submit", { noteIds: notes.map((n) => n.id), ...page }),
+    submit: (notes, page, target) =>
+      call<SubmitResult>("/feedback/submit", { noteIds: notes.map((n) => n.id), ...page, target: target?.id, agent: target?.label }),
     status: async (ids, status) => {
       await call("/feedback/status", { ids, status });
     },
+    targets: () => call<{ targets?: Target[] }>("/targets").then((r) => (Array.isArray(r.targets) ? r.targets : [])),
   };
 }
 

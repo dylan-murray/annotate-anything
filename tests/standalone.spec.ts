@@ -82,3 +82,61 @@ test("a failing onSubmit is reported, and the notes stay sent for a watcher", as
   expect(stored).toMatchObject({ status: "sent" });
   expect(stored.pickedUpAt).toBeFalsy();
 });
+
+test("a picked target reaches the hook with a handoff that reports back to this notes folder", async () => {
+  let batch: Parameters<NonNullable<CoreOptions["onSubmit"]>>[0] | undefined;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-target-"));
+  const core = createCore({ dir, command: "aa", targets: () => [{ id: "s1", label: "UI agent" }], onSubmit: (b) => ((batch = b), { to: b.agent!, ok: true }) });
+  const listed = await core.handle({ method: "GET", url: "/__annotate/targets", header: (h) => ({ host: "localhost" })[h], body: () => Promise.resolve("") });
+  expect(JSON.parse(listed!.body)).toEqual({ targets: [{ id: "s1", label: "UI agent" }] });
+  const note = { id: "n1", n: 1, kind: "element", route: "/", comment: "Tighten the header", selector: "header", tag: "header", createdAt: new Date().toISOString() };
+  await post(core, "/__annotate/feedback", { notes: [note], deleted: [] });
+  const res = await post(core, "/__annotate/feedback/submit", { noteIds: ["n1"], route: "/", target: "s1", agent: "UI agent" });
+  expect(batch).toMatchObject({ target: "s1", agent: "UI agent" });
+  expect(batch!.prompt).toContain("#1 element on / (header): Tighten the header");
+  expect(batch!.prompt).toContain(`aa status <n> working --dir '${dir}' --agent 'UI agent'`);
+  expect(res.delivery).toEqual({ to: "UI agent", ok: true });
+  expect(res.handoff).toBeUndefined();
+  expect(core.store.agent()).toBe("UI agent");
+});
+
+test("without a hook, a picked target gets the handoff back for the server in front to deliver", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-front-"));
+  const core = createCore({ dir });
+  const note = { id: "n1", n: 1, kind: "pin", route: "/", comment: "Move this", tag: "", createdAt: new Date().toISOString() };
+  await post(core, "/__annotate/feedback", { notes: [note], deleted: [] });
+  const res = await post(core, "/__annotate/feedback/submit", { noteIds: ["n1"], route: "/", target: "s1" });
+  expect(res.handoff).toContain("npx annotate-anything status <n> resolved");
+});
+
+test("when the server offers agents, Send asks which one and says where the notes went", async ({ page, request }) => {
+  fs.rmSync(process.env.AA_TEST_DIR + "-static-agents", { recursive: true, force: true });
+  await page.goto("http://localhost:5197/agents");
+  const host = page.locator("annotate-anything");
+  await host.locator(".launcher").click();
+  await expect(host.locator(".toolbar .status")).toContainText("Send lets you pick an agent");
+  await host.locator(".tool[data-mode=element]").click();
+  const b = (await page.locator("#headline").boundingBox())!;
+  await page.mouse.click(b.x + 20, b.y + b.height / 2);
+  await page.keyboard.type("Shorter headline");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await host.locator(".send").click();
+  await expect(host.locator(".phead")).toHaveText("Send to");
+  await expect(host.locator("li[data-target]")).toHaveText([/UI agent.*fixture · Claude/, /API agent/]);
+  await expect(host.locator("li[data-target]").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(host.locator(".pick")).toHaveCount(0);
+  await host.locator(".send").click();
+  await host.locator("li[data-target]", { hasText: "API agent" }).click();
+  await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to API agent.");
+  await expect(host.locator(".toolbar .busy")).toContainText("API agent picked up 1 note");
+  const delivered = await (await request.get("http://localhost:5197/delivered")).json();
+  expect(delivered.at(-1).target).toBe("api");
+  expect(delivered.at(-1).prompt).toContain("Shorter headline");
+  const p = (await page.locator(".intro").boundingBox())!;
+  await page.mouse.click(p.x + 20, p.y + p.height / 2);
+  await page.keyboard.type("Second note");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await host.locator(".send").click();
+  await expect(host.locator("li[data-target]").first()).toHaveText(/API agent/);
+});

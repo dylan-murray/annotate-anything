@@ -90,6 +90,9 @@ textarea.input::placeholder{color:var(--aa-muted)}
 .list{list-style:none;padding:4px;max-height:260px;overflow-y:auto;border-top:1px solid var(--aa-divider)}
 .list li{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer}
 .list li:hover{background:var(--aa-hover)}
+.list li:focus-visible{outline:2px solid var(--aa-accent);outline-offset:-2px}
+.phead{padding:8px 12px 2px;font-size:11px;font-weight:600;color:var(--aa-muted);border-top:1px solid var(--aa-divider)}
+.pick{border-top:0}
 .list li.empty{color:var(--aa-muted);cursor:default}
 .list li.empty:hover{background:none}
 .dot{flex:none;min-width:20px;height:20px;padding:0 5px;font-size:10.5px;font-weight:700;line-height:20px;text-align:center;color:var(--aa-on-accent);background:var(--aa-accent);border-radius:10px}

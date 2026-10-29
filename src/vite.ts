@@ -8,6 +8,7 @@ export interface PluginOptions {
   dir?: string;
   base?: string;
   onSubmit?: CoreOptions["onSubmit"];
+  targets?: CoreOptions["targets"];
   client?: {
     scope?: string;
     agentName?: string;
@@ -99,7 +100,7 @@ export default function annotateAnything(options: PluginOptions = {}): Plugin {
       return `import { annotate } from "annotate-anything";\nwindow.annotateAnything ??= annotate(${JSON.stringify(client)});\n`;
     },
     configureServer(server) {
-      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit }));
+      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit, targets: options.targets }));
       if (options.inject !== false) server.middlewares.use(injectIntoHtml);
     },
     transformIndexHtml: {
