@@ -1,9 +1,9 @@
 # annotate-anything design
 
 Status: first version built 2026-10-28 (core UI, anchoring, Vite plugin, Node
-middleware, script tag, CLI watcher, Agent Desk forwarding, clipboard mode).
+middleware, script tag, CLI watcher, clipboard mode).
 Since added: MCP server, `init`, live agent progress (picked up / working
-update / finished), Vercel palette as the only theme. Verified end to end with
+update / finished), a generic `onSubmit` server hook, Vercel palette as the only theme. Verified end to end with
 Claude Code (CLI watcher) and Codex 0.164 (MCP). Since then: shadow DOM and same-origin
 iframe anchoring, a shared request core with Node, fetch (Next.js) and standalone
 adapters, `serve` with a script tag and bookmarklet for any backend, HTML
@@ -24,7 +24,7 @@ src/
   core/        store, note model, routing, numbering
   anchor/      selector capture, re-find, placement, reposition loop
   ui/          launcher, toolbar, capture layer, marks, panel, list (typed DOM, no HTML strings)
-  transports/  http (dev server), agent-desk, clipboard (opt-in)
+  transports/  http (dev server), clipboard (opt-in)
   server/      Node middleware + Vite plugin: file store, merge, guards
   mcp/         MCP server over the same file store
 agent/         instructions/skill for agents, watcher CLI
@@ -36,7 +36,7 @@ tests/         Playwright at 1440x900 and 390x844
 
 ```ts
 annotate({
-  transport: "http" | "agent-desk" | "clipboard" | Transport,
+  transport: "http" | "clipboard" | Transport,
   endpoint?: string,
   context?: () => Record<string, unknown>,
   navigate?: (route: string) => void | Promise<void>,
@@ -119,10 +119,10 @@ before cached notes render so deleted marks don't flash back.
    `POST /feedback` (sync), `POST /feedback/submit`, `POST /feedback/status`.
    Exact-origin check, size caps, atomic temp-file writes on one queue.
    Send = sync, submit, then stamp `sentAt`; on failure notes stay unsent.
-2. **agent-desk**: the dev server forwards submissions to
-   `POST /api/coordinators/submit-feedback` with the token read server-side;
-   the page never sees it. Status and replies still flow through our store,
-   since Agent Desk doesn't return them.
+2. **onSubmit**: a server-side hook that gets each sent batch and pushes it
+   anywhere. It returns where the notes went; the page shows that, and errors
+   are reported rather than thrown. Status and replies still flow through the
+   store.
 3. **mcp**: list, get, set status, reply, and a blocking `watch` tool, over the
    same file store.
 4. **clipboard**: opt-in; Markdown prompt with the notes.
@@ -141,5 +141,5 @@ sentence reply; never resolve without a change.
 1. Dialog spike + fixture app.
 2. Core UI and anchoring with localStorage only; Playwright acceptance list.
 3. http transport, watcher, agent instructions, status/reply loop.
-4. MCP server, Agent Desk forwarder, clipboard mode.
+4. MCP server, `onSubmit` hook, clipboard mode.
 5. Packaging, docs, framework wrappers, publish.

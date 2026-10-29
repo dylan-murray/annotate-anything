@@ -1,13 +1,28 @@
 import path from "node:path";
 import { FileStore, MAX_NOTES } from "./store";
-import { deliver, type AgentDeskOptions } from "./agent-desk";
-import type { Status } from "../types";
+import type { Note, Status, Submission } from "../types";
 import { LOCAL_HOST } from "../local";
+
+export interface Delivery {
+  to: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface SubmitBatch {
+  notes: Note[];
+  submission: Submission;
+  file: string;
+  root: string;
+}
 
 export interface CoreOptions {
   dir?: string;
   base?: string;
-  agentDesk?: AgentDeskOptions | false;
+  // Push each sent batch somewhere (a webhook, a chat, an agent runner). Return where
+  // it went and the page says so; ok means the receiver has the notes. Errors are
+  // reported to the page, never thrown.
+  onSubmit?: (batch: SubmitBatch) => Delivery | void | Promise<Delivery | void>;
   // Other origins allowed to call the API from a browser (the standalone server
   // allows any local origin). Same-origin requests are always allowed.
   allowOrigin?: (origin: string) => boolean;
@@ -101,9 +116,15 @@ export function createCore(options: CoreOptions = {}) {
       const b = await json(req, SMALL_LIMIT);
       const ids = Array.isArray(b.noteIds) ? b.noteIds : [];
       const result = store.submit(ids, b);
-      let delivery;
-      if (result.submission && options.agentDesk) delivery = await deliver(options.agentDesk, result.notes, result.submission, store.feedback, root);
-      if (delivery?.ok && !delivery.detail) store.pickUp(result.submission!.noteIds);
+      let delivery: Delivery | undefined;
+      if (result.submission && options.onSubmit) {
+        try {
+          delivery = (await options.onSubmit({ notes: result.notes, submission: result.submission, file: store.feedback, root })) ?? undefined;
+        } catch (e) {
+          delivery = { to: "The onSubmit hook", ok: false, detail: e instanceof Error ? e.message : String(e) };
+        }
+      }
+      if (delivery?.ok) store.pickUp(result.submission!.noteIds);
       return { data: { submission: result.submission, sent: result.sent, watching: store.watching(), agent: store.agent(), delivery } };
     }
     if (route === "/feedback/status") {

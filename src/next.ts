@@ -3,6 +3,7 @@ import { createCore, HttpError, inProduction, type CoreOptions } from "./server/
 import { nodeRequest } from "./server/node";
 
 export type NextOptions = CoreOptions;
+export type { Delivery, SubmitBatch } from "./server/core";
 
 const BASE = "/api/annotate";
 

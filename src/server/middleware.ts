@@ -5,6 +5,7 @@ import { nodeRequest } from "./node";
 
 export type MiddlewareOptions = CoreOptions;
 export { isLocalOrigin } from "./core";
+export type { Delivery, SubmitBatch } from "./core";
 export { nodeRequest } from "./node";
 
 type Next = (err?: unknown) => void;

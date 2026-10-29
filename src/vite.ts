@@ -2,12 +2,12 @@ import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { createMiddleware } from "./server/middleware";
-import type { AgentDeskOptions } from "./server/agent-desk";
+import type { CoreOptions } from "./server/core";
 
 export interface PluginOptions {
   dir?: string;
   base?: string;
-  agentDesk?: AgentDeskOptions | false;
+  onSubmit?: CoreOptions["onSubmit"];
   client?: {
     scope?: string;
     agentName?: string;
@@ -99,7 +99,7 @@ export default function annotateAnything(options: PluginOptions = {}): Plugin {
       return `import { annotate } from "annotate-anything";\nwindow.annotateAnything ??= annotate(${JSON.stringify(client)});\n`;
     },
     configureServer(server) {
-      server.middlewares.use(createMiddleware({ dir, base, agentDesk: options.agentDesk }));
+      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit }));
       if (options.inject !== false) server.middlewares.use(injectIntoHtml);
     },
     transformIndexHtml: {

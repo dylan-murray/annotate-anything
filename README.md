@@ -125,10 +125,17 @@ tool.addControl(myToggleButton);
 
 React without Next: `import { Annotate } from "annotate-anything/react"`.
 
-Send to an Agent Desk session instead of a watcher:
+Push each sent batch somewhere else (a webhook, a chat, your own agent runner)
+with `onSubmit` on the Vite plugin, middleware or Next route. Return where it
+went and the page says so; `ok: true` marks the notes picked up:
 
 ```js
-annotateAnything({ agentDesk: { target: "my-session", dataDir: "~/personal/agent-desk/data" } })
+annotateAnything({
+  onSubmit: async ({ notes, submission }) => {
+    const res = await fetch("http://localhost:9000/hook", { method: "POST", body: JSON.stringify({ notes, submission }) });
+    return { to: "the review bot", ok: res.ok };
+  },
+})
 ```
 
 No server at all: `annotate({ transport: "clipboard" })` turns Send into Copy,
