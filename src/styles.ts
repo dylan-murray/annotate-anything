@@ -81,6 +81,14 @@ textarea.input::placeholder{color:var(--aa-muted)}
 .send{display:inline-flex;align-items:center;gap:6px;margin-left:2px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--aa-on-accent);background:var(--aa-accent);border-radius:8px;white-space:nowrap}
 .send:hover:not(:disabled){background:var(--aa-accent-hover)}
 .send:disabled{opacity:.45;cursor:default}
+.split{display:inline-flex;min-width:0;margin-left:2px}
+.split .send{margin-left:0}
+.split .send:has(+ .more){border-radius:8px 0 0 8px;min-width:0}
+.send.more{padding:6px 7px;border-radius:0 8px 8px 0;border-left:1px solid color-mix(in srgb,var(--aa-on-accent) 25%,transparent)}
+.send.more svg{width:13px;height:13px}
+.send .to{max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.current{flex:none;color:var(--aa-accent)}
+.current svg{width:14px;height:14px}
 .count{min-width:17px;padding:0 5px;font-size:10.5px;line-height:17px;text-align:center;color:var(--aa-ink);background:var(--aa-text);border-radius:9px}
 .slot{display:contents}
 .status,.busy{padding:6px 12px 8px;font-size:11.5px;color:var(--aa-muted);border-top:1px solid var(--aa-divider);overflow-wrap:anywhere}

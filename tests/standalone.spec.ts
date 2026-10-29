@@ -120,6 +120,7 @@ test("when the server offers agents, Send asks which one and says where the note
   await page.mouse.click(b.x + 20, b.y + b.height / 2);
   await page.keyboard.type("Shorter headline");
   await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(host.locator(".send.more")).toHaveCount(0);
   await host.locator(".send").click();
   await expect(host.locator(".phead")).toHaveText("Send to");
   await expect(host.locator("li[data-target]")).toHaveText([/UI agent.*fixture · Claude/, /API agent/]);
@@ -137,6 +138,14 @@ test("when the server offers agents, Send asks which one and says where the note
   await page.mouse.click(p.x + 20, p.y + p.height / 2);
   await page.keyboard.type("Second note");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await host.locator(".send").click();
+  const main = host.locator('.send[data-act="send"]');
+  await expect(main).toHaveText(/Send to API agent\s*1/);
+  await host.locator(".send.more").click();
   await expect(host.locator("li[data-target]").first()).toHaveText(/API agent/);
+  await expect(host.locator('li[aria-current="true"]')).toHaveText(/API agent/);
+  await host.locator(".send.more").click();
+  await expect(host.locator(".pick")).toHaveCount(0);
+  await main.click();
+  await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to API agent.");
+  expect((await (await request.get("http://localhost:5197/delivered")).json()).at(-1).prompt).toContain("Second note");
 });

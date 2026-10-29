@@ -87,7 +87,7 @@ export class Annotator {
   private listOpen = false;
   private confirming = false;
   private picking: Target[] | null = null;
-  private offers = false;
+  private targets: Target[] = [];
   private panel: Panel | null = null;
   private drawing: { x0: number; y0: number; x1: number; y1: number } | null = null;
   private msg: string | null = null;
@@ -592,6 +592,17 @@ export class Annotator {
     return n.status === "sent" && !n.pickedUpAt && this.transport.kind === "http" && !this.watching && !this.delivered;
   }
 
+  private get offers() {
+    return this.targets.length > 0;
+  }
+
+  // The agent Send goes to without asking: the last one picked, while it is still open.
+  private lastTarget(): Target | undefined {
+    if (this.transport.kind !== "http") return undefined;
+    const id = read<string>(this.keys.target, "");
+    return this.targets.find((t) => t.id === id);
+  }
+
   private noAgent() {
     return this.offers ? "no agent has it · open the note to send it to one" : `no agent attached · ask yours to run ${this.watchCmd()}`;
   }
@@ -642,13 +653,14 @@ export class Annotator {
     const tool = (k: Mode) =>
       `<button type="button" class="tool${this.mode === k ? " on" : ""}" data-mode="${k}" aria-pressed="${this.mode === k}" title="${TOOL_TITLE[k]}">${ICON[k]}${KIND_LABEL[k]}</button>`;
     const sorted = [...this.notes].sort((a, b) => a.n - b.n);
+    const to = this.lastTarget();
     const picker = this.picking
       ? `<div class="phead">Send to</div><ul class="list pick" aria-label="Send to">${
           this.picking.length
             ? this.picking
                 .map(
                   (t) =>
-                    `<li data-target="${esc(t.id)}" tabindex="0"><span class="ltext">${esc(t.label)}</span>${t.detail ? `<span class="lstate">${esc(t.detail)}</span>` : ""}</li>`,
+                    `<li data-target="${esc(t.id)}" tabindex="0"${t.id === to?.id ? ' aria-current="true"' : ""}><span class="ltext">${esc(t.label)}</span>${t.detail ? `<span class="lstate">${esc(t.detail)}</span>` : ""}${t.id === to?.id ? `<span class="current">${ICON.check}</span>` : ""}</li>`,
                 )
                 .join("")
             : '<li class="empty">Loading agents…</li>'
@@ -679,7 +691,9 @@ export class Annotator {
       `<button type="button" class="tool${this.listOpen ? " on" : ""}" data-act="list" aria-pressed="${this.listOpen}" title="All notes" aria-label="All notes">${ICON.list}${this.notes.length}</button>` +
       `<button type="button" class="tool icon${this.showMarks ? "" : " on"}" data-act="marks" title="${this.showMarks ? "Hide marks" : "Show marks"}" aria-label="${this.showMarks ? "Hide marks" : "Show marks"}">${this.showMarks ? ICON.eye : ICON.eyeOff}</button><span class="sep"></span>` +
       `<button type="button" class="tool" data-act="clear-done" ${d ? "" : "disabled"} title="Remove notes that are done">Clear done${d ? `<span class="count">${d}</span>` : ""}</button>` +
-      `<button type="button" class="send" data-act="send" ${canSend ? "" : "disabled"} title="${copy ? "Copy unsent notes to the clipboard" : this.transport.sends ? "Send unsent notes to your agent" : "No agent connection"}">${this.busy ? (copy ? "Copying…" : "Sending…") : copy ? "Copy" : "Send"}${u ? `<span class="count">${u}</span>` : ""}</button>` +
+      `<span class="split"><button type="button" class="send" data-act="send" ${canSend ? "" : "disabled"} title="${copy ? "Copy unsent notes to the clipboard" : to ? `Send unsent notes to ${esc(to.label)}` : this.transport.sends ? "Send unsent notes to your agent" : "No agent connection"}">${this.busy ? (copy ? "Copying…" : "Sending…") : copy ? "Copy" : to ? `<span class="to">Send to ${esc(to.label)}</span>` : "Send"}${u ? `<span class="count">${u}</span>` : ""}</button>` +
+      (to ? `<button type="button" class="send more" data-act="pick" ${canSend ? "" : "disabled"} aria-label="Send to another agent" aria-expanded="${!!this.picking}" title="Send to another agent">${ICON.caret}</button>` : "") +
+      `</span>` +
       `<span class="slot"><slot name="controls"></slot></span></div>` +
       (busy ? `<div class="busy" role="status"><i class="spinner"></i><span>${esc(busy)}</span></div>` : "") +
       `<div class="status" role="status">${esc(this.statusText())}</div>` +
@@ -760,7 +774,7 @@ export class Annotator {
       this.transport
         .targets()
         .then((t) => {
-          this.offers = t.length > 0;
+          this.targets = t;
           this.renderBar();
         })
         .catch(() => {});
@@ -974,22 +988,28 @@ export class Annotator {
     }
     if (!this.transport.targets) return this.send();
     this.listOpen = this.confirming = false;
-    this.picking = [];
+    const last = read<string>(this.keys.target, "");
+    const order = (list: Target[]) => [...list].sort((a, b) => Number(b.id === last) - Number(a.id === last));
+    const focusRow = (id?: string) =>
+      (this.bar.querySelector<HTMLElement>(`li[data-target="${CSS.escape(id ?? "")}"]`) ?? this.bar.querySelector<HTMLElement>("li[data-target]"))?.focus();
+    // Show the agents already known at once; the fresh list replaces them when it arrives.
+    this.picking = order(this.targets);
     this.renderBar();
-    let targets: Target[] = [];
+    focusRow();
+    let targets = this.targets;
     try {
       targets = await this.transport.targets();
     } catch {}
     if (!this.picking) return;
-    this.offers = targets.length > 0;
+    this.targets = targets;
     if (!targets.length) {
       this.picking = null;
       return this.send();
     }
-    const last = read<string>(this.keys.target, "");
-    this.picking = [...targets].sort((a, b) => Number(b.id === last) - Number(a.id === last));
+    const focused = (this.shadow.activeElement as HTMLElement | null)?.dataset?.target;
+    this.picking = order(targets);
     this.renderBar();
-    this.bar.querySelector<HTMLElement>("li[data-target]")?.focus();
+    focusRow(focused);
   }
 
   private async send(target?: Target) {
@@ -1158,7 +1178,10 @@ export class Annotator {
         if (this.panel) this.closePanel();
         this.remove(all);
         this.flash(`Cleared ${plural(all.length, "note")}.`);
-      } else if (a === "send") void this.pick();
+      } else if (a === "send") {
+        const t = this.lastTarget();
+        void (t ? this.send(t) : this.pick());
+      } else if (a === "pick") void this.pick();
     });
     this.bar.addEventListener("keydown", (e) => {
       const li = (e.target as Element).closest<HTMLElement>("li[data-note],li[data-target]");
