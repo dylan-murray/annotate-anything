@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.annotations/
+test-results/
+playwright-report/
+.DS_Store
+fixture-next/.next/
+fixture-next/next-env.d.ts
+fixture-astro/.astro/
+fixture-astro/dist/

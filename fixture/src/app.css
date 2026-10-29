@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #1c1c1c; background: #f6f4ef; }
+div { font-family: inherit; }
+button { font: inherit; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid #c9c3b6; background: #fff; }
+header { position: sticky; top: 0; z-index: 10; display: flex; gap: 16px; align-items: center; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e3ded3; }
+header nav { display: flex; gap: 12px; }
+header a { color: #3a5a40; text-decoration: none; font-weight: 600; }
+header a.active { text-decoration: underline; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 600px; }
+.hero h1 { margin: 0 0 8px; font-size: 32px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 24px 0; }
+.card { padding: 16px; background: #fff; border: 1px solid #e3ded3; border-radius: 10px; }
+.card h3 { margin: 0 0 4px; font-size: 16px; }
+.scroller { height: 240px; overflow: auto; border: 1px solid #c9c3b6; border-radius: 10px; background: #fff; }
+.scroller .row { padding: 10px 14px; border-bottom: 1px solid #eee; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 100vw); padding: 24px; background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,.2); }
+.radix-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+dialog.native { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 0; border-radius: 12px; }
+dialog.native::backdrop { background: rgba(0,0,0,.35); }
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+input { width: 100%; padding: 8px; border: 1px solid #c9c3b6; border-radius: 8px; font: inherit; }
+.variant-toggle { padding: 4px 8px; font-size: 12px; border-radius: 6px; }
+.hero h1 { color: #1d5fd6; }
+.card h3.billing-title { color: #d12f2f; }
