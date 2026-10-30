@@ -1,20 +1,54 @@
-# annotate-anything
+<h4 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/wordmark-dark.svg">
+    <img src="docs/images/wordmark-light.svg" alt="annotate-anything" width="336">
+  </picture>
+  <br>
+  Click on any running web app, leave notes, and send them to your coding agent
+</h4>
 
-Click on any running web app, write what should change, and send the notes
-straight to the coding agent working on it. The agent replies on each note,
-and you see the reply where you left the note.
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white&style=flat-square&labelColor=24292f" alt="TypeScript">
+  <img src="https://img.shields.io/badge/runtime%20dependencies-0-555?style=flat-square&labelColor=24292f" alt="No runtime dependencies">
+  <img src="https://img.shields.io/badge/frameworks-any-555?style=flat-square&labelColor=24292f" alt="Works with any framework">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3da639?style=flat-square&labelColor=24292f" alt="License: MIT"></a>
+</p>
 
-It works with any framework through one Vite plugin, one Node middleware or one
-script tag, and it starts only in local development unless you turn it on
-elsewhere.
+<h2></h2>
 
-Early days: not published to npm yet.
+annotate-anything adds a small notes bar to the web app you're running locally.
+Point at what should change, write a note, and send the batch to the coding
+agent working on that app. The agent marks each note as it picks it up and
+replies on the note when it's done, so you see what changed right where you
+asked for it.
 
-## Try it in a Vite app
+It's one Vite plugin, Node middleware, Next.js route or script tag, it works in
+any framework, and it only turns on in local development.
+
+<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo: on a fixture analytics dashboard, the pencil button opens the notes bar. Element mode outlines the revenue figure and a note asks to drop the cents. Area mode draws a box over the chart for a note that the legend covers the last two bars, and Pin marks the Invite teammate button with a note to use the brand green. Send opens a Send to list of two running agents, and the notes go to the UI agent. The three marks turn purple when sent, amber while the agent works, and green with a check when it's done. Opening the first note shows the agent's reply: rounded to whole dollars at weight 700">
+
+## ✨ What you get
+
+- 📍 **Pin, Element and Area** notes: an exact spot, a whole element, or a box you drag
+- 🤖 **Any coding agent** through a shell command or an MCP server: Claude Code, Codex, Grok, Cursor, Gemini CLI, or anything else with a shell
+- 💬 **Status and replies on the note**: sent, picked up, working, then done with the agent's reply
+- 🎯 **Send to a running agent**, picked from a list, when your app or desk runs several
+- 🧱 **Any stack**: Vite, Next.js, any Node server, or a script tag and bookmarklet for everything else
+- 🪟 **Works inside dialogs and web components**, including open shadow roots and same-origin iframes, without closing the app's modals
+- 🔒 **Local only**: on in development, off in production builds, and the standalone server only answers this machine
+
+## 🚀 Quick start
+
+annotate-anything isn't on npm yet. Build it from a checkout, then add it to
+your app:
 
 ```sh
-npm i -D ~/personal/annotate-anything
+git clone https://github.com/dylan-murray/annotate-anything.git
+cd annotate-anything && npm install && npm run build
+cd ../your-app && npm i -D ../annotate-anything
 ```
+
+In a Vite app (React, Vue, Svelte, Solid, Preact):
 
 ```js
 // vite.config.js
@@ -26,21 +60,29 @@ export default defineConfig({
 ```
 
 Start the dev server and a pencil button appears in the bottom-right corner.
-Notes are kept in `.annotations/` (it ignores itself in git).
+Notes are kept in `.annotations/`, which ignores itself in git. Other stacks are
+[below](#-setup-by-stack).
 
-Then run `npx annotate-anything init`, which adds a short section to your
-`AGENTS.md` / `CLAUDE.md` so every agent in the project knows the loop.
-
-## Any coding agent
-
-Tell any agent with a shell to run:
+Then point your agent at the notes. In a terminal or in your agent's session:
 
 ```sh
-npx annotate-anything attach
+npx annotate-anything init     # adds a short section to AGENTS.md / CLAUDE.md
+npx annotate-anything attach   # explains the loop and waits for your next Send
 ```
 
-It finds the project's notes, explains the loop, works out which agent it is,
-and waits for your next Send. The agent then reports back on each note:
+## 🖱️ Using it
+
+- **Pin** marks an exact spot, **Element** a whole element, **Area** a box you drag.
+- ⌘↵ saves a note. Esc steps back one level: the note, the list, the mode, then the toolbar.
+- **Send** delivers every unsent note. Marks turn purple when sent, amber while
+  the agent works, and green with a check when it's done, with its reply on the note.
+- Drag the pencil anywhere; double-click it to put it back.
+
+## 🤖 Connect an agent
+
+Any agent with a shell can run `npx annotate-anything attach`. It finds the
+project's notes, explains the loop, works out which agent it is, and waits for
+your next Send. The agent then reports back on each note:
 
 ```sh
 npx annotate-anything status 3 working --reply "Shrinking the heading"
@@ -61,26 +103,15 @@ Cursor and Gemini CLI take the same command in their `mcpServers` config.
 Either way, the browser shows each step on the note: sent, picked up,
 "Codex is working on it · <latest update>", then the agent's reply.
 
-## Using it
-
-- **Pin** marks an exact spot, **Element** a whole element, **Area** a box you
-  drag.
-- ⌘↵ saves a note. Esc steps back one level: the note, the list, the mode,
-  then the toolbar.
-- **Send** delivers every unsent note. Marks turn purple when sent, amber while
-  the agent works and green with a check when it's done, with its reply on the
-  note.
-- Drag the pencil anywhere; double-click it to put it back.
-
-## Setup by stack
+## 🧱 Setup by stack
 
 | Stack | Setup |
 | --- | --- |
 | Vite apps (React, Vue, Svelte, Solid, Preact) | `plugins: [annotateAnything()]` from `annotate-anything/vite` |
-| Server-rendered Vite frameworks (Astro, SvelteKit, React Router/Remix) | the same plugin; it adds itself to server-rendered pages too (tested with Astro). Astro: `vite: { plugins: [annotateAnything()] }` |
-| Next.js App Router | a route and a component, below |
+| Server-rendered Vite frameworks (Astro, SvelteKit, React Router/Remix) | The same plugin. It adds itself to server-rendered pages too (tested with Astro). Astro: `vite: { plugins: [annotateAnything()] }` |
+| Next.js App Router | A route and a component, [below](#nextjs) |
 | Express, webpack-dev-server, any Node server | `app.use(createMiddleware())` from `annotate-anything/middleware`, plus `<script src="/__annotate/client.js"></script>` |
-| Anything else: Rails, Django, Phoenix, Laravel, Go, Nuxt, static sites | `npx annotate-anything serve`, then its script tag or bookmarklet |
+| Anything else: Rails, Django, Phoenix, Laravel, Go, Nuxt, static sites | `npx annotate-anything serve`, then its script tag or bookmarklet, [below](#any-backend-or-no-code-changes) |
 
 `npx annotate-anything init` looks at the project and prints the steps for it.
 
@@ -98,22 +129,63 @@ import { Annotate } from "annotate-anything/next/client";
 <Annotate />
 ```
 
-The route answers 404 in production builds and the component does nothing
+The route answers 404 in production builds and the component renders nothing
 there. Pages Router: `export default annotatePagesRoute()` in
 `pages/api/annotate/[...path].ts`, with `export const config = { api: { bodyParser: false } }`.
 
-### Any backend, or no code changes at all
+### Any backend, or no code changes
 
 ```sh
 npx annotate-anything serve
 ```
 
 This runs a small notes server on `localhost:4319` that any page on your
-machine can use. Either add `<script src="http://localhost:4319/__annotate/client.js"></script>`
-to the app's dev layout, or open `http://localhost:4319` and drag the
-**Annotate** bookmarklet to your bookmarks bar, then click it on any local page
-without changing its code. Pages on custom local domains need
-`--origin http://app.mycompany.test:3000`.
+machine can use. Either add
+`<script src="http://localhost:4319/__annotate/client.js"></script>` to the
+app's dev layout, or open `http://localhost:4319` and drag the **Annotate**
+bookmarklet to your bookmarks bar, then click it on any local page without
+changing its code. Pages on custom local domains need
+`--origin http://app.example.test:3000`.
+
+The server only listens on this machine (127.0.0.1 and ::1), and it refuses
+requests addressed to any other host name.
+
+## 🛠️ Hooks and options
+
+### Send notes somewhere else
+
+Push each sent batch to a webhook, a chat, or your own agent runner with
+`onSubmit` on the Vite plugin, middleware or Next route. Return where it went
+and the page says so; `ok: true` marks the notes picked up:
+
+```js
+annotateAnything({
+  onSubmit: async ({ notes, submission }) => {
+    const res = await fetch("http://localhost:9000/hook", { method: "POST", body: JSON.stringify({ notes, submission }) });
+    return { to: "the review bot", ok: res.ok };
+  },
+})
+```
+
+### Let people pick an agent
+
+Apps that run several agents can let the person pick one. Return them from
+`targets`, and Send opens a **Send to** list. After the first pick, Send goes
+straight to that agent and the arrow beside it chooses another. The chosen id
+reaches `onSubmit` as `batch.target`, with `batch.prompt` ready to hand over:
+the notes, plus the commands that report progress back to this notes folder.
+
+```js
+annotateAnything({
+  targets: () => mySessions().map((s) => ({ id: s.id, label: s.name, detail: s.repo })),
+  onSubmit: ({ target, prompt }) => mySessions.send(target, prompt).then(() => ({ to: "your session", ok: true })),
+})
+```
+
+A server in front of the notes server can do the same: answer
+`GET <base>/targets` itself, and deliver the `handoff` that `/feedback/submit`
+returns when the request names a target. Pass `headers` to `annotate()` if that
+server wants an auth header.
 
 ### In code
 
@@ -125,36 +197,6 @@ tool.addControl(myToggleButton);
 
 React without Next: `import { Annotate } from "annotate-anything/react"`.
 
-Push each sent batch somewhere else (a webhook, a chat, your own agent runner)
-with `onSubmit` on the Vite plugin, middleware or Next route. Return where it
-went and the page says so; `ok: true` marks the notes picked up:
-
-```js
-annotateAnything({
-  onSubmit: async ({ notes, submission }) => {
-    const res = await fetch("http://localhost:9000/hook", { method: "POST", body: JSON.stringify({ notes, submission }) });
-    return { to: "the review bot", ok: res.ok };
-  },
-})
-```
-
-Apps that run several agents can let the person pick one. Return them from
-`targets`, and Send opens a "Send to" list; the chosen id reaches `onSubmit`
-as `batch.target`, with `batch.prompt` ready to hand over (the notes, plus the
-commands that report progress back to this notes folder):
-
-```js
-annotateAnything({
-  targets: () => mySessions().map((s) => ({ id: s.id, label: s.name, detail: s.repo })),
-  onSubmit: ({ target, prompt }) => mySessions.send(target, prompt).then(() => ({ to: "your session", ok: true })),
-})
-```
-
-A server in front of the notes server can do the same: answer
-`GET <base>/targets` itself, and deliver the `handoff` that `/feedback/submit`
-returns when the request names a target. Pass `headers` to `annotate()` if
-that server wants an auth header.
-
 No server at all: `annotate({ transport: "clipboard" })` turns Send into Copy,
 which puts the notes on your clipboard as a prompt.
 
@@ -164,7 +206,7 @@ Anywhere in the page, including inside open shadow roots (web components) and
 same-origin iframes. Cross-origin iframes and closed shadow roots can't be
 reached from the page; pins still mark the spot.
 
-## Theming
+## 🎨 Theming
 
 Set CSS custom properties on the `annotate-anything` element, or pass
 `client.theme` to the plugin:
@@ -173,7 +215,12 @@ Set CSS custom properties on the `annotate-anything` element, or pass
 annotate-anything { --aa-accent: #2f6b4f; --aa-ink: #1f2a24; --aa-font: 13px/1.4 "Inter", sans-serif; }
 ```
 
-## Development
+The tokens are `ink`, `ink-2`, `ink-hover`, `text`, `muted`, `line`, `edge`,
+`divider`, `hover`, `accent`, `accent-hover`, `on-accent`, `sent`, `working`,
+`resolved`, `danger`, `shadow`, `launcher-ring`, `radius` and `font`, each as
+`--aa-<name>`.
+
+## 🧑‍💻 Development
 
 ```sh
 npm install
@@ -181,3 +228,9 @@ npm run dev        # fixture app with Headless UI, Radix and native dialogs
 npm test           # builds, then runs the Playwright checks at 1440 and 390 wide
 npm run typecheck
 ```
+
+See [docs/design.md](docs/design.md) for how it's put together.
+
+## 📄 License
+
+[MIT](LICENSE)
