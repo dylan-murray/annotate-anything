@@ -1,7 +1,7 @@
 <h4 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/wordmark-dark.svg">
-    <img src="docs/images/wordmark-light.svg" alt="annotate-anything" width="336">
+    <img src="docs/images/wordmark-light.svg" alt="annotate-anything" width="300">
   </picture>
   <br>
   Click on any running web app, leave notes, and send them to your coding agent
