@@ -276,6 +276,7 @@ test("send stamps notes, the agent's status and reply round-trip, and reopen/cle
   await note(page, "element", page.locator(".lede"), "Tighten the lede");
 
   const watcher = spawn("node", [CLI, "watch", "--once", "--agent", "Claude", "--dir", DIR], { stdio: ["ignore", "pipe", "pipe"] });
+  const exited = new Promise<number>((r) => watcher.on("exit", (c) => r(c ?? 1)));
   let out = "";
   watcher.stdout.on("data", (d) => (out += d));
   await expect.poll(() => fs.existsSync(`${DIR}/watcher.json`)).toBe(true);
@@ -284,7 +285,7 @@ test("send stamps notes, the agent's status and reply round-trip, and reopen/cle
   await t.send.click();
   await expect(t.status).toContainText("Sent 2 notes to Claude");
   await expect(t.host.locator(".mark.sent")).toHaveCount(2);
-  const code = await new Promise<number>((r) => watcher.on("exit", (c) => r(c ?? 1)));
+  const code = await exited;
   expect(code).toBe(0);
   expect(out).toContain("SUBMITTED 2 note(s)");
   expect(out).toContain("Make the title smaller");
