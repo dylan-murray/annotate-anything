@@ -8,9 +8,8 @@
 </h4>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white&style=flat-square&labelColor=24292f" alt="TypeScript">
-  <img src="https://img.shields.io/badge/runtime%20dependencies-0-555?style=flat-square&labelColor=24292f" alt="No runtime dependencies">
-  <img src="https://img.shields.io/badge/frameworks-any-555?style=flat-square&labelColor=24292f" alt="Works with any framework">
+  <a href="https://github.com/dylan-murray/annotate-anything/actions/workflows/checks.yml"><img src="https://github.com/dylan-murray/annotate-anything/actions/workflows/checks.yml/badge.svg?branch=main" alt="Checks"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node.js-22.12%2B-5fa04e?logo=nodedotjs&logoColor=white&style=flat-square&labelColor=24292f" alt="Node.js 22.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3da639?style=flat-square&labelColor=24292f" alt="License: MIT"></a>
 </p>
 
@@ -25,7 +24,7 @@ asked for it.
 It's one Vite plugin, Node middleware, Next.js route or script tag, it works in
 any framework, and it only turns on in local development.
 
-<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo: on a fixture analytics dashboard, the pencil button opens the notes bar. Element mode outlines the revenue figure and a note asks to drop the cents. Area mode draws a box over the chart for a note that the legend covers the last two bars, and Pin marks the Invite teammate button with a note to use the brand green. Send opens a Send to list of two running agents, and the notes go to the UI agent. The three marks turn purple when sent, amber while the agent works, and green with a check when it's done. Opening the first note shows the agent's reply: rounded to whole dollars at weight 700">
+<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo: on a fixture pricing page, the pencil button opens the notes bar. Element mode selects the headline and a note asks for a shorter one. Area mode draws a box around the Pro plan with a note to make it the dark card, and Pin marks its button with a note to say Start free trial. Send opens a Send to list of two running agents, and the notes go to the UI agent. The marks turn purple when sent, amber while the agent works, and green with a check when each is done, while the page updates: the new headline, a dark Pro card and the new button text. Opening the first note shows the agent's reply">
 
 ## ✨ What you get
 

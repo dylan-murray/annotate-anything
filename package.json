@@ -5,6 +5,9 @@
   "description": "Click on any running web app, leave notes, and send them straight to your coding agent.",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "vite build && vite build --config vite.iife.config.ts && tsc -p tsconfig.build.json",
     "dev": "vite --config fixture/vite.config.ts",
