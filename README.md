@@ -24,7 +24,7 @@ asked for it.
 It's one Vite plugin, Node middleware, Next.js route or script tag, it works in
 any framework, and it only turns on in local development.
 
-<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo: on a fixture pricing page, the pencil button opens the notes bar. Element mode selects the headline and a note asks for a shorter one. Area mode draws a box around the Pro plan with a note to make it the dark card, and Pin marks its button with a note to say Start free trial. Send opens a Send to list of two running agents, and the notes go to the UI agent. The marks turn purple when sent, amber while the agent works, and green with a check when each is done, while the page updates: the new headline, a dark Pro card and the new button text. Opening the first note shows the agent's reply">
+<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo on two fixture apps. On Nocturne, a music app, Element mode selects the album title with a note to make it bigger, Area mode boxes the playing track with a note to give it a neon glow, and Pin marks the Play button with a note to make it pink. Send goes to the UI agent, the marks turn purple when sent, amber while the agent works and green with a check when done, and the page updates as each note resolves. Opening the first note shows the reply. On Atlas, a road trip planner, the same steps shorten the title, make the map route warmer and bolder, and change the button to say Let's go">
 
 ## ✨ What you get
 
