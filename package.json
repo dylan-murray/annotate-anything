@@ -1,7 +1,7 @@
 {
   "name": "annotate-anything",
   "version": "0.1.0",
-  "description": "A visual engineering tool for leaving notes and sending them straight to your agent.",
+  "description": "A visual engineering tool for leaving notes and sending them straight to your coding agent.",
   "type": "module",
   "license": "MIT",
   "repository": {

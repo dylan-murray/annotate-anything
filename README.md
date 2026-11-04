@@ -4,7 +4,7 @@
     <img src="docs/images/wordmark-light.svg" alt="annotate-anything" width="300">
   </picture>
   <br>
-  A visual engineering tool for leaving notes and sending them straight to your agent.
+  A visual engineering tool for leaving notes and sending them straight to your coding agent.
 </h4>
 
 <p align="center">
