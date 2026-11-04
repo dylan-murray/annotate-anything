@@ -24,7 +24,7 @@ asked for it.
 It's one Vite plugin, Node middleware, Next.js route or script tag, it works in
 any framework, and it only turns on in local development.
 
-<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo on two fixture apps. On Nocturne, a music app, Element mode selects the album title with a note to make it bigger, Area mode boxes the playing track with a note to give it a neon glow, and Pin marks the Play button with a note to make it pink. Send goes to the UI agent, the marks turn purple when sent, amber while the agent works and green with a check when done, and the page updates as each note resolves. Opening the first note shows the reply. On Atlas, a road trip planner, the same steps shorten the title, make the map route warmer and bolder, and change the button to say Let's go">
+<img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo in a browser with two tabs of fixture apps. On Nocturne, a music app, Element mode selects the album cover with a note asking for a full-screen now playing view, and Area mode boxes the player with a note to make the waveform huge. Send goes to the UI agent, the marks show each note's progress, and as the notes resolve the cover grows to fill the page and a large waveform rises across the bottom. The cursor then clicks the Atlas tab, a road trip planner. A note on the Big Sur stop asks to add a stop in Santa Barbara and an Area note on the map asks for a sunset glow. The route redraws through the new stop, the itinerary and mileage update, the route turns sunset colours, and the first note opens to show the agent's reply">
 
 ## ✨ What you get
 
