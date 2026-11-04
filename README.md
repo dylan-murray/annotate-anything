@@ -15,11 +15,14 @@
 
 <h2></h2>
 
-annotate-anything adds a small notes bar to the web app you're running locally.
-Point at what should change, write a note, and send the batch to the coding
-agent working on that app. The agent marks each note as it picks it up and
-replies on the note when it's done, so you see what changed right where you
-asked for it.
+annotate-anything adds a small notes bar to your web app in development. Point
+at what should change, write a note, and send your notes to a coding agent
+running on your machine.
+
+The agent shows its progress on each note and replies as it goes, so you see
+what changed right where you asked for it.
+
+To connect an agent, run `npx annotate-anything attach` in its session.
 
 It's one Vite plugin, Node middleware, Next.js route or script tag, it works in
 any framework, and it only turns on in local development.
