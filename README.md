@@ -29,7 +29,7 @@ mean. Press Send, and the agent shows its progress and replies right on the note
 - 🎯 **Send to a running agent**, picked from a list, when your app or desk runs several
 - 🧱 **Any stack**: Vite, Next.js, any Node server, or a script tag and bookmarklet for everything else
 - 🪟 **Works inside dialogs and web components**, including open shadow roots and same-origin iframes, without closing the app's modals
-- 🔒 **Local only**: on in development, off in production builds, and the standalone server only answers this machine
+- 🔒 **Local only**: on in development, off in production builds, and it refuses requests from other machines
 
 ## 🚀 Quick start
 
@@ -138,16 +138,22 @@ machine can use. Either add
 `<script src="http://localhost:4319/__annotate/client.js"></script>` to the
 app's dev layout, or open `http://localhost:4319` and drag the **Annotate**
 bookmarklet to your bookmarks bar, then click it on any local page without
-changing its code. Pages on custom local domains need
+changing its code. Pages that aren't on `localhost` need
 `--origin http://app.example.test:3000`.
 
 The server only listens on this machine (127.0.0.1 and ::1).
 
-Every setup refuses requests addressed to a host name that isn't local (`localhost`,
-private addresses, `.test`, `.local`, `.internal`, `.lan`), so a website can't
-reach your notes by pointing its own domain at your machine. Using a tunnel or a
-public dev domain? Add it with `allowedHosts: ["dev.example.com"]` on the
-middleware or Next route; the Vite plugin follows Vite's `server.allowedHosts`.
+Every setup refuses requests from other machines and requests addressed to a host
+name that isn't local (`localhost`, private addresses, `.test`, `.local`,
+`.internal`, `.lan`), so a website can't reach your notes by pointing its own domain
+at your machine. Testing on a phone, in a container or through a tunnel? Pass
+`allowRemote: true` to the Vite plugin, middleware or Next route, and only on a
+network you trust, since anyone who can reach it can send notes to your agent. Add
+public dev domains with `allowedHosts: ["dev.example.com"]` on the middleware or
+Next route; the Vite plugin follows Vite's `server.allowedHosts`.
+
+The Next.js App Router can't see the caller's address directly, and `next dev`
+listens on your whole network by default, so run `next dev -H 127.0.0.1`.
 
 ## 🛠️ Hooks and options
 

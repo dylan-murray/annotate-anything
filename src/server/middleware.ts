@@ -1,12 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createCore, inProduction, type CoreOptions } from "./core";
-import { clientBundle } from "./client-file";
-import { nodeRequest } from "./node";
+import { createCore, inProduction, type CoreOptions } from "./core.js";
+import { clientBundle } from "./client-file.js";
+import { nodeRequest } from "./node.js";
 
 export type MiddlewareOptions = CoreOptions;
-export { isLocalOrigin } from "./core";
-export type { Delivery, SubmitBatch } from "./core";
-export { nodeRequest } from "./node";
+export { isLocalOrigin, isLoopbackOrigin } from "./core.js";
+export type { Delivery, SubmitBatch } from "./core.js";
+export { nodeRequest } from "./node.js";
 
 type Next = (err?: unknown) => void;
 

@@ -2,9 +2,14 @@
   "name": "annotate-anything",
   "version": "0.0.0",
   "private": true,
-  "description": "Click on any running web app, leave notes, and send them straight to your coding agent.",
+  "description": "A visual engineering tool for leaving notes and sending them straight to your agent.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dylan-murray/annotate-anything.git"
+  },
+  "homepage": "https://github.com/dylan-murray/annotate-anything#readme",
   "engines": {
     "node": ">=22.12"
   },
@@ -12,7 +17,8 @@
     "build": "vite build && vite build --config vite.iife.config.ts && tsc -p tsconfig.build.json",
     "dev": "vite --config fixture/vite.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && playwright test"
+    "test": "npm run build && playwright test",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@headlessui/react": "2.2.10",
@@ -35,28 +41,28 @@
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./vite": {
       "types": "./dist/types/vite.d.ts",
-      "import": "./dist/vite.js"
+      "default": "./dist/vite.js"
     },
     "./middleware": {
       "types": "./dist/types/server/middleware.d.ts",
-      "import": "./dist/middleware.js"
+      "default": "./dist/middleware.js"
     },
     "./script": "./dist/annotate-anything.iife.js",
     "./next": {
       "types": "./dist/types/next.d.ts",
-      "import": "./dist/next.js"
+      "default": "./dist/next.js"
     },
     "./next/client": {
       "types": "./dist/types/next-client.d.ts",
-      "import": "./dist/next-client.js"
+      "default": "./dist/next-client.js"
     },
     "./react": {
       "types": "./dist/types/react.d.ts",
-      "import": "./dist/react.js"
+      "default": "./dist/react.js"
     }
   },
   "files": [

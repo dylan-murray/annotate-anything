@@ -1,7 +1,7 @@
 import path from "node:path";
-import { FileStore, MAX_NOTES } from "./store";
-import type { Note, Status, Submission, Target } from "../types";
-import { LOCAL_HOST } from "../local";
+import { FileStore, LimitError, MAX_NOTES } from "./store.js";
+import type { Note, Status, Submission, Target } from "../types.js";
+import { LOCAL_HOST, LOOPBACK_HOST } from "../local.js";
 
 export interface Delivery {
   to: string;
@@ -50,12 +50,15 @@ export interface CoreOptions {
   targets?: () => Target[] | Promise<Target[]>;
   // How agents run the CLI, for the handoff prompt.
   command?: string;
-  // Other origins allowed to call the API from a browser (the standalone server
-  // allows any local origin). Same-origin requests are always allowed.
+  // Other origins allowed to call the API from a browser (the standalone server allows
+  // this machine's own origins). Same-origin requests are always allowed.
   allowOrigin?: (origin: string) => boolean;
   // Host names this answers to besides local ones: exact names, ".example.com" for a
   // domain and its subdomains, or true for any host.
   allowedHosts?: string[] | true;
+  // Answer requests from other machines: a phone on your network, a tunnel, a container.
+  // Anyone who can reach it can then read notes and send them to your agent.
+  allowRemote?: boolean;
   // Run even when NODE_ENV is production. Off by default.
   enabled?: boolean;
   // Source of the script-tag bundle served at <base>/client.js.
@@ -63,6 +66,8 @@ export interface CoreOptions {
 }
 
 export interface CoreRequest {
+  // The caller's address, when the adapter can see the socket.
+  remote?: string;
   method: string;
   url: string;
   header(name: string): string | undefined;
@@ -96,6 +101,24 @@ export function isLocalOrigin(origin: string): boolean {
   }
 }
 
+export function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    return (u.protocol === "http:" || u.protocol === "https:") && LOOPBACK_HOST.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+const isLoopbackAddress = (a: string) => /^(127\.|::1$|::ffff:127\.|localhost$)/.test(a.trim());
+
+// Browser checks can't stop a script on another machine, which sets whatever headers it
+// likes. The socket address can't be faked; forwarded headers catch a proxy on this machine.
+export function fromElsewhere(req: Pick<CoreRequest, "remote" | "header">): boolean {
+  if (req.remote && !isLoopbackAddress(req.remote)) return true;
+  return (req.header("x-forwarded-for") ?? "").split(",").some((a) => a.trim() && !isLoopbackAddress(a));
+}
+
 // A request must name a local host or an allowed one. Any other Host is a site that
 // pointed its own domain at this machine (DNS rebinding) to look same-origin.
 export function isKnownHost(host: string, allowed?: string[] | true): boolean {
@@ -116,9 +139,11 @@ export function createCore(options: CoreOptions = {}) {
   const root = process.cwd();
   // Notes live outside the app's code; keep Next.js from tracing the whole project for this path.
   const store = new FileStore(path.resolve(/*turbopackIgnore: true*/ root, options.dir ?? ".annotations"));
-  try {
-    store.ensure();
-  } catch {}
+  if (!inProduction(options)) {
+    try {
+      store.ensure();
+    } catch {}
+  }
   const base = (options.base ?? "/__annotate").replace(/\/$/, "");
   const state = () => ({ ...store.read(), watching: store.watching(), agent: store.agent() });
 
@@ -198,6 +223,13 @@ export function createCore(options: CoreOptions = {}) {
   async function handle(req: CoreRequest): Promise<CoreResponse | null> {
     const pathname = req.url.split("?")[0]!;
     if (pathname !== base && !pathname.startsWith(base + "/")) return null;
+    if (!options.allowRemote && fromElsewhere(req)) {
+      return {
+        status: 403,
+        headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
+        body: JSON.stringify({ error: "annotate-anything only answers this machine; set allowRemote: true if you trust this network" }),
+      };
+    }
     const host = req.header("host");
     if (host && !isKnownHost(host, options.allowedHosts)) {
       return {
@@ -244,7 +276,7 @@ export function createCore(options: CoreOptions = {}) {
       if (out.script !== undefined) return { status: 200, headers: { ...headers, "Content-Type": "text/javascript; charset=utf-8" }, body: out.script };
       return reply(out.status ?? 200, out.data);
     } catch (e) {
-      const status = e instanceof HttpError ? e.status : e instanceof Error && /status must be/.test(e.message) ? 400 : 500;
+      const status = e instanceof HttpError ? e.status : e instanceof LimitError ? 413 : e instanceof Error && /status must be/.test(e.message) ? 400 : 500;
       return reply(status, { error: e instanceof Error ? e.message : String(e) });
     }
   }

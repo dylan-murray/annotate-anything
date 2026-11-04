@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createCore, HttpError, inProduction, type CoreOptions } from "./server/core";
-import { nodeRequest } from "./server/node";
+import { createCore, HttpError, inProduction, type CoreOptions } from "./server/core.js";
+import { nodeRequest } from "./server/node.js";
 
 export type NextOptions = CoreOptions;
-export type { Delivery, SubmitBatch } from "./server/core";
+export type { Delivery, SubmitBatch } from "./server/core.js";
 
 const BASE = "/api/annotate";
 

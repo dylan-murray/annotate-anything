@@ -1,14 +1,15 @@
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
-import { createMiddleware } from "./server/middleware";
-import type { CoreOptions } from "./server/core";
+import { createMiddleware } from "./server/middleware.js";
+import type { CoreOptions } from "./server/core.js";
 
 export interface PluginOptions {
   dir?: string;
   base?: string;
   onSubmit?: CoreOptions["onSubmit"];
   targets?: CoreOptions["targets"];
+  allowRemote?: CoreOptions["allowRemote"];
   client?: {
     scope?: string;
     agentName?: string;
@@ -102,7 +103,7 @@ export default function annotateAnything(options: PluginOptions = {}): Plugin {
     configureServer(server) {
       // Vite has already vetted the Host against its own list.
       const allowedHosts = server.config.server.allowedHosts;
-      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit, targets: options.targets, allowedHosts }));
+      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit, targets: options.targets, allowedHosts, allowRemote: options.allowRemote }));
       if (options.inject !== false) server.middlewares.use(injectIntoHtml);
     },
     transformIndexHtml: {

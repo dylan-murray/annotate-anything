@@ -14,6 +14,8 @@ export interface Note {
   n: number;
   kind: Kind;
   route: string;
+  // The page's origin, so a server shared by several apps keeps their notes apart.
+  origin?: string;
   comment: string;
   createdAt: string;
   updatedAt: string;

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { annotate, type AnnotateOptions } from "./index";
+import { annotate, type AnnotateOptions } from "./index.js";
 
 export type AnnotateProps = AnnotateOptions;
 

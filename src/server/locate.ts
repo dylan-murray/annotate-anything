@@ -19,7 +19,8 @@ function stamp(dir: string): number {
 export function findNotesDirs(start: string): string[] {
   const here = path.join(start, ".annotations");
   if (fs.existsSync(here)) return [here];
-  for (let dir = path.dirname(start); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+  const atRepoRoot = fs.existsSync(path.join(start, ".git"));
+  for (let dir = path.dirname(start); !atRepoRoot && dir !== path.dirname(dir); dir = path.dirname(dir)) {
     const up = path.join(dir, ".annotations");
     if (fs.existsSync(up)) return [up];
     if (fs.existsSync(path.join(dir, ".git"))) break;

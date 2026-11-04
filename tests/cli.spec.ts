@@ -109,7 +109,7 @@ test("attach finds the notes folder below the agent's shell, names the agent, ex
   proc.stdout.on("data", (d) => (out += d));
   await expect.poll(() => out).toContain("Waiting for notes");
   expect(out).toContain(`attached as Codex to ${fs.realpathSync(nested)}`);
-  expect(out).toContain("npx annotate-anything status <n> working");
+  expect(out).toContain("status <n> working");
   expect(moved.agent()).toBe("Codex");
   expect(moved.watching()).toBe(true);
 

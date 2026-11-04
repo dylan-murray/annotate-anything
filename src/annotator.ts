@@ -1,8 +1,8 @@
-import { containing, cssPath, elementAt, find, inDialog, labelFor, place, rectOf, rootsOf, scrollableAt, stableAttr, textOf, topLayer, within, type Placed } from "./anchor";
-import { ICON } from "./icons";
-import { css } from "./styles";
-import { clipboard, http, local, type PageInfo, type Transport } from "./transport";
-import type { Box, FeedbackState, Kind, Mode, Note, Status, Target } from "./types";
+import { containing, cssPath, elementAt, find, inDialog, labelFor, place, rectOf, rootsOf, scrollableAt, stableAttr, textOf, topLayer, within, type Placed } from "./anchor.js";
+import { ICON } from "./icons.js";
+import { css } from "./styles.js";
+import { clipboard, http, local, type PageInfo, type Transport } from "./transport.js";
+import type { Box, FeedbackState, Kind, Mode, Note, Status, Target } from "./types.js";
 
 export interface Options {
   transport?: "http" | "clipboard" | "local" | Transport;
@@ -168,7 +168,7 @@ export class Annotator {
     this.wire();
     this.placeLauncher();
     this.attach();
-    this.modalObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "aria-modal", "role"] });
+    this.modalObserver.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "aria-modal", "role"] });
     this.render();
     void this.start();
   }
@@ -197,6 +197,7 @@ export class Annotator {
   destroy() {
     this.destroyed = true;
     this.setActive(false);
+    this.setKeys(false);
     this.modalObserver.disconnect();
     clearTimeout(this.pushTimer);
     clearTimeout(this.pollTimer);
@@ -224,7 +225,8 @@ export class Annotator {
     this.render();
   }
 
-  private unsent = () => this.notes.filter((n) => n.status === "open");
+  private unsent = () => this.notes.filter((n) => n.status === "open" && this.mine(n));
+  private mine = (n: Note) => !n.origin || n.origin === location.origin;
   private done = () => this.notes.filter((n) => n.status === "resolved");
   private waiting = () => this.notes.filter((n) => n.status === "sent" || n.status === "working");
 
@@ -254,9 +256,10 @@ export class Annotator {
         out.push(mine);
         continue;
       }
-      out.push({ ...mine, status: theirs.status, sentAt: theirs.sentAt, pickedUpAt: theirs.pickedUpAt, reply: theirs.reply, resolvedAt: theirs.resolvedAt });
+      const newer = Date.parse(theirs.updatedAt) > Date.parse(mine.updatedAt) ? { comment: theirs.comment, updatedAt: theirs.updatedAt } : {};
+      out.push({ ...mine, ...newer, n: theirs.n, status: theirs.status, sentAt: theirs.sentAt, pickedUpAt: theirs.pickedUpAt, reply: theirs.reply, resolvedAt: theirs.resolvedAt });
     }
-    for (const theirs of server.values()) if (!deleted.has(theirs.id)) out.push(theirs);
+    for (const theirs of server.values()) if (!deleted.has(theirs.id) && this.mine(theirs)) out.push(theirs);
     this.notes = out;
     this.deleted = [...deleted];
     this.watching = !!state.watching;
@@ -265,6 +268,7 @@ export class Annotator {
   }
 
   private apply(state: FeedbackState) {
+    if (this.destroyed) return;
     const before = this.panel && !this.panel.isNew ? this.notes.find((n) => n.id === this.panel!.note.id) : undefined;
     const was = new Map(this.notes.map((n) => [n.id, n.status]));
     this.merge(state);
@@ -286,6 +290,7 @@ export class Annotator {
     try {
       this.apply(await this.transport.pull());
     } catch {
+      if (this.destroyed) return;
       this.connected = false;
       this.ready = true;
       this.render();
@@ -293,19 +298,23 @@ export class Annotator {
   }
 
   private schedulePush(delay = 300) {
-    if (this.transport.kind !== "http") return;
+    if (this.destroyed || this.transport.kind !== "http") return;
     clearTimeout(this.pushTimer);
     this.pushTimer = window.setTimeout(() => void this.flush(), delay);
   }
 
-  private async flush() {
-    if (this.transport.kind !== "http") return;
+  // Returns why the notes didn't reach the server, if they didn't.
+  private async flush(): Promise<string | undefined> {
+    if (this.destroyed || this.transport.kind !== "http") return;
     clearTimeout(this.pushTimer);
     while (this.pushing) await this.pushing;
+    let failed: string | undefined;
     this.pushing = (async () => {
       try {
-        this.apply(await this.transport.push(this.notes, this.deleted));
-      } catch {
+        this.apply(await this.transport.push(this.notes, this.deleted.slice(-2000)));
+      } catch (e) {
+        failed = (e as Error).message;
+        if (this.destroyed) return;
         this.connected = false;
         this.renderBar();
         this.schedulePush(15000);
@@ -313,6 +322,7 @@ export class Annotator {
     })();
     await this.pushing;
     this.pushing = null;
+    return failed;
   }
 
   private poll() {
@@ -402,7 +412,7 @@ export class Annotator {
     document[f]("visibilitychange", this.onVisible);
     if (on) {
       patchHistory();
-      this.layoutObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: LAYOUT_ATTRS });
+      this.layoutObserver.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: LAYOUT_ATTRS });
     } else {
       this.layoutObserver.disconnect();
       for (const root of this.roots)
@@ -807,6 +817,7 @@ export class Annotator {
     return {
       id: uuid(),
       n,
+      origin: location.origin,
       kind,
       route: this.route,
       comment: "",
@@ -1029,8 +1040,17 @@ export class Annotator {
     this.busy = true;
     this.render();
     try {
-      if (this.transport.kind === "http") await this.flush();
+      if (this.transport.kind === "http") {
+        const failed = await this.flush();
+        if (failed) throw new Error(failed);
+      }
       const res = await this.transport.submit(notes, this.page(), target);
+      if (this.transport.kind === "http" && !res.submission) {
+        this.busy = false;
+        this.flash("Those notes were already sent.");
+        void this.pull();
+        return;
+      }
       this.busy = false;
       if (this.transport.kind === "clipboard") {
         this.flash(`Copied ${plural(notes.length, "note")} to the clipboard. Paste them into your agent.`);

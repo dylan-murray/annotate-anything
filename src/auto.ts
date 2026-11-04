@@ -1,4 +1,4 @@
-import { annotate, type AnnotateOptions } from "./index";
+import { annotate, type AnnotateOptions } from "./index.js";
 
 type Win = { AnnotateAnything?: unknown; annotateAnything?: ReturnType<typeof annotate>; __ANNOTATE_ANYTHING__?: AnnotateOptions };
 const w = window as unknown as Win;

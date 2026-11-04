@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { annotate, type AnnotateOptions } from "./index";
+import { annotate, type AnnotateOptions } from "./index.js";
 
 export type AnnotateProps = AnnotateOptions;
 

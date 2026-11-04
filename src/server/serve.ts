@@ -1,7 +1,7 @@
 import http from "node:http";
-import { createCore, isKnownHost, isLocalOrigin } from "./core";
-import { nodeRequest } from "./node";
-import { clientBundle } from "./client-file";
+import { createCore, isKnownHost, isLoopbackOrigin } from "./core.js";
+import { nodeRequest } from "./node.js";
+import { clientBundle } from "./client-file.js";
 
 export interface ServeOptions {
   port?: number;
@@ -29,12 +29,13 @@ function page(base: string): string {
 }
 
 // A standalone notes server for apps whose dev server can't host the middleware:
-// Rails, Django, Phoenix, Nuxt, a static site, anything. Pages on local origins load
-// the client from here and talk to it cross-origin.
+// Rails, Django, Phoenix, Nuxt, a static site, anything. Pages load the client from here
+// and talk to it cross-origin. Only this machine's own origins are trusted by default;
+// anything else has to be named with --origin.
 export function startServer(options: ServeOptions = {}): http.Server {
   const origins = new Set(options.origins ?? []);
   const named = [...origins].map((o) => new URL(o).hostname);
-  const core = createCore({ dir: options.dir, command: options.command, enabled: true, allowedHosts: named, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
+  const core = createCore({ dir: options.dir, command: options.command, enabled: true, allowedHosts: named, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLoopbackOrigin(o) });
   const handler: http.RequestListener = (req, res) => {
     if (!isKnownHost(req.headers.host ?? "", named)) {
       res.writeHead(403, { "Content-Type": "text/plain" }).end("annotate-anything only answers requests addressed to this machine");

@@ -1,10 +1,10 @@
-import { Annotator, type Options } from "./annotator";
-import { LOCAL_HOST } from "./local";
+import { Annotator, type Options } from "./annotator.js";
+import { LOCAL_HOST } from "./local.js";
 
-export type { Options } from "./annotator";
-export type { Transport, PageInfo } from "./transport";
-export type { Note, Submission, Status, Kind, FeedbackState, SubmitResult, Target } from "./types";
-export { http, clipboard, local, markdown } from "./transport";
+export type { Options } from "./annotator.js";
+export type { Transport, PageInfo } from "./transport.js";
+export type { Note, Submission, Status, Kind, FeedbackState, SubmitResult, Target } from "./types.js";
+export { http, clipboard, local, markdown } from "./transport.js";
 
 export interface AnnotateOptions extends Options {
   enabled?: boolean;

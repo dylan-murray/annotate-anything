@@ -1,13 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { LIFECYCLE, type Box, type Kind, type Note, type Status, type Submission } from "../types";
+import { LIFECYCLE, type Box, type Kind, type Note, type Status, type Submission } from "../types.js";
 
 const KINDS: Kind[] = ["pin", "element", "area"];
 const STATUSES: Status[] = ["open", "sent", "working", "resolved"];
 const ID = /^[\w.-]{1,100}$/;
 export const WATCHER_STALE_MS = 6000;
 export const MAX_NOTES = 1000;
+
+export class LimitError extends Error {}
 
 export interface State {
   version: 1;
@@ -23,6 +25,10 @@ export interface PageMeta {
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+// Single-line fields can't carry line breaks or escape codes, so they can't pass for the
+// tool's own output when an agent reads them.
+const line = (v: unknown, max: number) => str(v, max).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").trim();
+const prose = (v: unknown, max: number) => str(v, max).replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]/g, "");
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
 const iso = (v: unknown) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v.slice(0, 40) : undefined);
 
@@ -36,7 +42,7 @@ export function cleanNote(raw: unknown): Note | null {
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== "string" || !ID.test(r.id)) return null;
   const kind = KINDS.includes(r.kind as Kind) ? (r.kind as Kind) : null;
-  const comment = str(r.comment, 20000).trim();
+  const comment = prose(r.comment, 20000).trim();
   if (!kind || !comment) return null;
   let context: Record<string, unknown> = {};
   if (r.context && typeof r.context === "object" && !Array.isArray(r.context) && JSON.stringify(r.context).length <= 4000)
@@ -47,14 +53,14 @@ export function cleanNote(raw: unknown): Note | null {
     id: r.id,
     n: Number.isInteger(r.n) && (r.n as number) > 0 ? Math.min(r.n as number, 1e6) : 0,
     kind,
-    route: str(r.route, 500) || "/",
+    route: line(r.route, 500) || "/",
     comment,
     createdAt: iso(r.createdAt) ?? new Date().toISOString(),
     updatedAt: iso(r.updatedAt) ?? new Date().toISOString(),
     status: STATUSES.includes(r.status as Status) ? (r.status as Status) : "open",
-    selector: str(r.selector, 1000),
-    tag: str(r.tag, 40),
-    targetText: str(r.targetText, 400),
+    selector: line(r.selector, 1000),
+    tag: line(r.tag, 40),
+    targetText: line(r.targetText, 400),
     x: num(r.x),
     y: num(r.y),
     bounds: box(r.bounds),
@@ -63,7 +69,9 @@ export function cleanNote(raw: unknown): Note | null {
     inDialog: r.inDialog === true,
     context,
   };
-  const testId = str(r.testId, 200);
+  const origin = line(r.origin, 300);
+  if (origin) note.origin = origin;
+  const testId = line(r.testId, 200);
   if (testId) note.testId = testId;
   if (r.offset) note.offset = box(r.offset);
   const sentAt = iso(r.sentAt);
@@ -72,7 +80,7 @@ export function cleanNote(raw: unknown): Note | null {
   if (pickedUpAt) note.pickedUpAt = pickedUpAt;
   const resolvedAt = iso(r.resolvedAt);
   if (resolvedAt) note.resolvedAt = resolvedAt;
-  const reply = str(r.reply, 20000);
+  const reply = prose(r.reply, 20000);
   if (reply) note.reply = reply;
   return note;
 }
@@ -113,14 +121,24 @@ export class FileStore {
   }
 
   read(): State {
+    let raw: string;
     try {
-      const d = JSON.parse(fs.readFileSync(this.feedback, "utf8"));
+      raw = fs.readFileSync(this.feedback, "utf8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, notes: [], deleted: [] };
+      throw e;
+    }
+    try {
+      const d = JSON.parse(raw);
       return {
         version: 1,
         notes: Array.isArray(d.notes) ? d.notes.map(cleanNote).filter(Boolean) : [],
         deleted: Array.isArray(d.deleted) ? d.deleted.filter((x: unknown) => typeof x === "string") : [],
       };
     } catch {
+      const kept = `${this.feedback}.corrupt-${Date.now()}`;
+      fs.renameSync(this.feedback, kept);
+      console.error(`annotate-anything: ${this.feedback} couldn't be read, so it was kept as ${kept}`);
       return { version: 1, notes: [], deleted: [] };
     }
   }
@@ -160,14 +178,20 @@ export class FileStore {
       const state = this.read();
       const gone = new Set([...state.deleted, ...deleted.filter((d): d is string => typeof d === "string" && ID.test(d))]);
       const byId = new Map(state.notes.map((n) => [n.id, n]));
+      const used = new Set(state.notes.map((n) => n.n));
       for (const raw of incoming) {
         const note = cleanNote(raw);
         if (!note || gone.has(note.id)) continue;
         const stored = byId.get(note.id);
         if (!stored) {
+          // Two tabs can pick the same number; agents refer to notes by it, so keep it unique.
+          if (!note.n || used.has(note.n)) note.n = Math.max(0, ...used) + 1;
+          used.add(note.n);
           byId.set(note.id, note);
           continue;
         }
+        if (Date.parse(stored.updatedAt) > Date.parse(note.updatedAt)) continue;
+        note.n = stored.n;
         const merged = { ...note } as Record<string, unknown>;
         for (const k of LIFECYCLE) {
           if (stored[k] !== undefined) merged[k] = stored[k];
@@ -176,6 +200,7 @@ export class FileStore {
         byId.set(note.id, merged as unknown as Note);
       }
       const next: State = { version: 1, notes: [...byId.values()].filter((n) => !gone.has(n.id)), deleted: [...gone].slice(-5000) };
+      if (next.notes.length > MAX_NOTES) throw new LimitError(`At most ${MAX_NOTES} notes; clear the finished ones`);
       this.write(next);
       return next;
     });
@@ -195,9 +220,9 @@ export class FileStore {
       const submission: Submission = {
         id: crypto.randomUUID().replace(/-/g, ""),
         submittedAt,
-        route: str(page.route, 500),
-        url: str(page.url, 2000),
-        title: str(page.title, 300),
+        route: line(page.route, 500),
+        url: line(page.url, 2000),
+        title: line(page.title, 300),
         noteIds: fresh.map((n) => n.id),
         count: fresh.length,
         excerpts: fresh.map((n) => `#${n.n} ${n.comment.replace(/\s+/g, " ").slice(0, 140)}`),
@@ -209,12 +234,8 @@ export class FileStore {
   }
 
   resolveRefs(state: State, refs: string[]): Note[] {
-    return refs
-      .map((ref) => {
-        const r = ref.replace(/^#/, "");
-        return state.notes.find((n) => n.id === r || String(n.n) === r);
-      })
-      .filter((n): n is Note => !!n);
+    const want = new Set(refs.map((ref) => ref.replace(/^#/, "")));
+    return state.notes.filter((n) => want.has(n.id) || want.has(String(n.n)));
   }
 
   setStatus(refs: string[], status: Status, reply?: string): Note[] {
@@ -233,7 +254,7 @@ export class FileStore {
         if (status === "resolved") n.resolvedAt = t;
         else delete n.resolvedAt;
         if (reply !== undefined) {
-          const text = reply.trim().slice(0, 20000);
+          const text = prose(reply, 20000).trim();
           if (text) n.reply = text;
           else delete n.reply;
         }
@@ -297,7 +318,7 @@ export function dump(notes: Note[], file: string): string {
     if (n.inDialog) lines.push("  inside a dialog");
     if (Object.keys(n.context).length) lines.push(`  context: ${JSON.stringify(n.context)}`);
     lines.push(...n.comment.split("\n").map((l) => "  > " + l));
-    if (n.reply) lines.push(`  reply: ${n.reply}`);
+    if (n.reply) lines.push(`  reply: ${n.reply.split("\n").join("\n    ")}`);
     lines.push("");
   }
   return lines.join("\n").trimEnd();

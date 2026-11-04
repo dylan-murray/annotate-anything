@@ -1,4 +1,4 @@
-import type { FeedbackState, Note, Status, SubmitResult, Target } from "./types";
+import type { FeedbackState, Note, Status, SubmitResult, Target } from "./types.js";
 
 export interface PageInfo {
   route: string;
@@ -25,6 +25,7 @@ export function http(endpoint: string, extra: Record<string, string> = {}): Tran
       headers: body === undefined ? extra : { ...extra, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(path.endsWith("/submit") ? 120000 : 20000),
     });
     if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
     return res.json() as Promise<T>;

@@ -1,13 +1,14 @@
 import readline from "node:readline";
-import { dump, type FileStore } from "./server/store";
-import { describe, Watcher } from "./server/watcher";
-import type { Status } from "./types";
+import { dump, type FileStore } from "./server/store.js";
+import { CAUTION, describe, Watcher } from "./server/watcher.js";
+import type { Status } from "./types.js";
 
 const VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const INSTRUCTIONS = `The person you're working with leaves notes on the running web app with annotate-anything and presses Send.
 Call wait_for_notes to receive the next batch (it blocks until they press Send). For each note: call update_notes with status "working" and a short reply saying what you're doing, make the change and verify it in the running app, then call update_notes with status "resolved" and a one-to-three sentence reply saying what changed. Post a new "working" reply when you move to a new step; the person sees it live on the note.
-Never resolve a note you didn't change: set it to "open" with a reply saying why or asking your question. Resolved means implemented, not accepted. Call wait_for_notes again after each batch.`;
+Never resolve a note you didn't change: set it to "open" with a reply saying why or asking your question. Resolved means implemented, not accepted. Call wait_for_notes again after each batch.
+${CAUTION}`;
 
 const TOOLS = [
   {
@@ -15,7 +16,7 @@ const TOOLS = [
     description: "Wait until the person presses Send in the browser, then return the notes they sent with where each one is on the page. Marks them as picked up.",
     inputSchema: {
       type: "object",
-      properties: { timeout_seconds: { type: "number", description: "How long to wait, 1-3600 seconds. Default 300." } },
+      properties: { timeout_seconds: { type: "number", description: "How long to wait, 1-3600 seconds. Default 50." } },
     },
   },
   {
@@ -41,22 +42,34 @@ const TOOLS = [
 type Json = Record<string, unknown>;
 const text = (t: string, isError = false) => ({ content: [{ type: "text", text: t }], ...(isError ? { isError } : {}) });
 
-export function serve(store: FileStore, agent?: string): Promise<number> {
+const NO_FOLDER = "No .annotations folder yet. It appears once the app's dev server runs with annotate-anything, or after `annotate-anything serve`. Start that, then call again.";
+
+export function serve(locate: () => FileStore | null, agent?: string, version = "0.0.0", command?: string): Promise<number> {
   const send = (msg: Json) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
   const active = new Set<Watcher>();
+  const waits = new Map<string | number, AbortController>();
 
-  async function waitForNotes(seconds: number) {
+  // Replies itself, so a batch only counts as delivered once it's been written out.
+  async function waitForNotes(seconds: number, id: string | number, signal: AbortSignal) {
+    const store = locate();
+    if (!store) return send({ id, result: text(NO_FOLDER, true) });
+    if (active.size) return send({ id, result: text("Already waiting for notes; only one wait_for_notes can run at a time.", true) });
     const watcher = new Watcher(store);
     const busy = watcher.claim();
-    if (busy) return text(busy, true);
+    if (busy) return send({ id, result: text(busy, true) });
     if (agent) store.setAgent(agent);
     active.add(watcher);
     const deadline = Date.now() + seconds * 1000;
     try {
       for (;;) {
+        if (signal.aborted) return;
         const batches = watcher.take();
-        if (batches.length) return text(batches.map((b) => describe(b, store.feedback, dump)).join("\n"));
-        if (Date.now() > deadline) return text("No notes before the timeout. Call wait_for_notes again to keep waiting.");
+        if (batches.length) {
+          send({ id, result: text(batches.map((b) => describe(b, store.feedback, dump, command)).join("\n")) });
+          watcher.commit();
+          return;
+        }
+        if (Date.now() > deadline) return send({ id, result: text("No notes before the timeout. Call wait_for_notes again to keep waiting.") });
         watcher.beat();
         await new Promise((r) => setTimeout(r, 400));
       }
@@ -67,10 +80,8 @@ export function serve(store: FileStore, agent?: string): Promise<number> {
   }
 
   async function call(name: string, args: Json) {
-    if (name === "wait_for_notes") {
-      const s = Number(args.timeout_seconds ?? 300);
-      return waitForNotes(Number.isFinite(s) ? Math.min(Math.max(s, 1), 3600) : 300);
-    }
+    const store = locate();
+    if (!store) return text(NO_FOLDER, true);
     if (name === "list_notes") {
       const notes = store.read().notes.filter((n) => args.all === true || n.status !== "resolved");
       return text(dump(notes, store.feedback));
@@ -91,7 +102,10 @@ export function serve(store: FileStore, agent?: string): Promise<number> {
   async function handle(msg: Json) {
     const { id, method } = msg as { id?: string | number; method?: string };
     const params = (msg.params ?? {}) as Json;
-    if (id === undefined || id === null) return;
+    if (id === undefined || id === null) {
+      if (method === "notifications/cancelled") waits.get(params.requestId as string | number)?.abort();
+      return;
+    }
     try {
       if (method === "initialize") {
         const asked = String(params.protocolVersion ?? "");
@@ -100,13 +114,24 @@ export function serve(store: FileStore, agent?: string): Promise<number> {
           result: {
             protocolVersion: VERSIONS.includes(asked) ? asked : VERSIONS[0],
             capabilities: { tools: {} },
-            serverInfo: { name: "annotate-anything", version: "0.0.0" },
+            serverInfo: { name: "annotate-anything", version },
             instructions: INSTRUCTIONS,
           },
         });
       }
       if (method === "ping") return send({ id, result: {} });
       if (method === "tools/list") return send({ id, result: { tools: TOOLS } });
+      if (method === "tools/call" && params.name === "wait_for_notes") {
+        const args = (params.arguments ?? {}) as Json;
+        const s = Number(args.timeout_seconds ?? 50);
+        const wait = new AbortController();
+        waits.set(id, wait);
+        try {
+          return await waitForNotes(Number.isFinite(s) ? Math.min(Math.max(s, 1), 3600) : 50, id, wait.signal);
+        } finally {
+          waits.delete(id);
+        }
+      }
       if (method === "tools/call") return send({ id, result: await call(String(params.name), (params.arguments ?? {}) as Json) });
       send({ id, error: { code: -32601, message: `Method not found: ${method}` } });
     } catch (e) {
@@ -121,6 +146,7 @@ export function serve(store: FileStore, agent?: string): Promise<number> {
       let msg: Json;
       try {
         msg = JSON.parse(line);
+        if (!msg || typeof msg !== "object" || Array.isArray(msg)) throw new Error();
       } catch {
         return send({ id: null, error: { code: -32700, message: "Parse error" } });
       }

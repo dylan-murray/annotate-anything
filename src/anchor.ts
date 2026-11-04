@@ -1,4 +1,4 @@
-import type { Box, Note } from "./types";
+import type { Box, Note } from "./types.js";
 
 const STATE_CLASS = /^(on|off|open|closed|active|sel|selected|current|hover|hovered|focus|focused|flash|show|shown|hidden|visible|disabled|checked|expanded|collapsed|loading)$|^(is|has)-/;
 const GENERATED_ID = /\d{4,}|[:«»]|^_r_|^radix-|^headlessui-|^react-aria|^mui-|^ember\d/;
