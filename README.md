@@ -15,10 +15,9 @@
 
 <h2></h2>
 
-Point at anything in your web app in development and write a note. Each note
-records the exact element and its coordinates, so your coding agent knows
-precisely what you mean. The agent shows its progress and replies right on the
-note. To connect an agent, run `npx annotate-anything attach` in its session.
+Leave notes directly on your web app while you develop it. Each note records the
+exact element and its coordinates, so your coding agent knows precisely what you
+mean. Press Send, and the agent shows its progress and replies right on the note.
 
 <img src="docs/images/annotate-anything-demo.webp" alt="annotate-anything demo in a browser with two tabs of fixture apps. On Nocturne, a music app, Element mode selects the album cover with a note asking for a full-screen now playing view, and Area mode boxes the player with a note to make the waveform huge. Send goes to the UI agent, the marks show each note's progress, and as the notes resolve the cover grows to fill the page and a large waveform rises across the bottom. The cursor then clicks the Atlas tab, a road trip planner. A note on the Big Sur stop asks to add a stop in Santa Barbara and an Area note on the map asks for a sunset glow. The route redraws through the new stop, the itinerary and mileage update, the route turns sunset colours, and the first note opens to show the agent's reply">
 
