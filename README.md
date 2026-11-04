@@ -15,7 +15,7 @@
 
 <h2></h2>
 
-annotate-anything adds a small notes bar to your web app in development. Point
+Add a small notes bar to your web app in development. Point
 at what should change, write a note, and send your notes to a coding agent
 running on your machine. The agent shows its progress on each note and replies
 as it goes, so you see what changed right where you asked for it. To connect an
