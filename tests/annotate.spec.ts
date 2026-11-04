@@ -165,9 +165,10 @@ test("marks follow page scroll, nested scroll and re-renders that reorder elemen
   const near = async (mark: typeof billing, target: typeof row) => {
     const m = await mark.boundingBox();
     const b = await target.boundingBox();
-    const x = m!.x + m!.width / 2;
-    const y = m!.y + m!.height / 2;
-    return x > b!.x - 30 && x < b!.x + b!.width + 30 && y > b!.y - 30 && y < b!.y + b!.height + 30;
+    if (!m || !b) return false;
+    const x = m.x + m.width / 2;
+    const y = m.y + m.height / 2;
+    return x > b.x - 30 && x < b.x + b.width + 30 && y > b.y - 30 && y < b.y + b.height + 30;
   };
 
   await page.evaluate(() => scrollBy(0, 120));
@@ -411,3 +412,45 @@ for (const route of ["/ssr", "/ssr-stream"]) {
     expect(stored().notes.find((n: any) => n.comment === "Server page note").route).toBe(route);
   });
 }
+
+test("a note whose target sits past the screen edge still opens its panel on screen", async ({ page }) => {
+  await load(page);
+  const t = ui(page);
+  await note(page, "element", page.locator(".lede"), "Tighten the lede");
+  await page.locator(".lede").evaluate((el) => Object.assign((el as HTMLElement).style, { position: "fixed", left: "3000px", top: "80px" }));
+  await t.act("list").click();
+  await t.list.locator("li").first().click();
+  await expect(t.panel).toBeVisible();
+  await expect
+    .poll(async () => {
+      const b = (await t.panel.boundingBox())!;
+      return b.x >= 0 && b.x + b.width <= page.viewportSize()!.width;
+    })
+    .toBe(true);
+});
+
+test("jumping to a note shows its latest state when an update lands during the jump", async ({ page }) => {
+  await load(page);
+  const t = ui(page);
+  await note(page, "element", page.locator(".lede"), "Tighten the lede");
+  await t.send.click();
+  await expect(t.host.locator(".mark.sent")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await t.act("list").click();
+
+  let release = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  let polled = () => {};
+  const polling = new Promise<void>((r) => (polled = r));
+  await page.route("**/__annotate/feedback", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    polled();
+    await held;
+    await route.continue();
+  });
+  await polling;
+  cli("status", "1", "resolved", "--reply", "Tightened it.");
+  await t.list.locator("li").first().click();
+  release();
+  await expect(t.panel.locator(".reply")).toContainText("Tightened it.");
+});

@@ -564,7 +564,7 @@ export class Annotator {
     const h = this.panelEl.offsetHeight;
     let left = r.x + r.width + 14;
     if (left + w > innerWidth - 8) left = r.x - w - 14;
-    if (left < 8) left = Math.min(Math.max(8, r.x), innerWidth - w - 8);
+    if (left < 8 || left + w > innerWidth - 8) left = Math.max(8, Math.min(r.x, innerWidth - w - 8));
     let top = Math.min(Math.max(8, r.y - 8), innerHeight - h - 8);
     if (r.hidden) top = innerHeight / 3;
     Object.assign(this.panelEl.style, { left: left + "px", top: Math.max(8, top) + "px", width: w + "px" });
@@ -977,7 +977,11 @@ export class Annotator {
     this.found.delete(n.id);
     const el = this.elementFor(n);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(() => this.openPanel(n, false), el ? 350 : 0);
+    // An update may have landed during the jump, so open whatever is current by then.
+    setTimeout(() => {
+      const fresh = this.notes.find((x) => x.id === n.id);
+      if (fresh) this.openPanel(fresh, false);
+    }, el ? 350 : 0);
   }
 
   // Hosts that run several agents list them; the person picks one, as in a chat app's share sheet.
