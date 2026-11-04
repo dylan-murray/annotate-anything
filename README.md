@@ -33,13 +33,8 @@ mean. Press Send, and the agent shows its progress and replies right on the note
 
 ## 🚀 Quick start
 
-annotate-anything isn't on npm yet. Build it from a checkout, then add it to
-your app:
-
 ```sh
-git clone https://github.com/dylan-murray/annotate-anything.git
-cd annotate-anything && npm install && npm run build
-cd ../your-app && npm i -D ../annotate-anything
+npm i -D annotate-anything
 ```
 
 In a Vite app (React, Vue, Svelte, Solid, Preact):
