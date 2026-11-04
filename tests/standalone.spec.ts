@@ -165,3 +165,46 @@ test("the standalone server answers only on this machine and only to local host 
   expect(await get("app.devbox.example:5192")).toBe(200);
   expect(await get("attacker.example:5192")).toBe(403);
 });
+
+test("every adapter refuses a Host that only rebinds to this machine, unless it's allowed", async () => {
+  const { createMiddleware } = await import("../src/server/middleware");
+  const { annotateRoute } = await import("../src/next");
+  const { default: annotateAnything } = await import("../src/vite");
+  const { createServer } = await import("vite");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-hosts-"));
+  const listen = (app: http.RequestListener) =>
+    new Promise<http.Server>((resolve) => {
+      const s = http.createServer(app).listen(0, "127.0.0.1", () => resolve(s));
+    });
+  const get = (port: number, host: string) =>
+    new Promise<number>((resolve, reject) =>
+      http.get({ host: "127.0.0.1", port, path: "/__annotate/feedback", headers: { host } }, (r) => (r.resume(), resolve(r.statusCode!))).on("error", reject),
+    );
+  const portOf = (s: http.Server) => (s.address() as { port: number }).port;
+
+  const plain = await listen((req, res) => createMiddleware({ dir })(req, res, () => res.writeHead(404).end()));
+  const allowed = await listen((req, res) => createMiddleware({ dir, allowedHosts: ["app.example.org", ".team.example"] })(req, res, () => res.writeHead(404).end()));
+  const open = await listen((req, res) => createMiddleware({ dir, allowedHosts: true })(req, res, () => res.writeHead(404).end()));
+  const vite = await createServer({ configFile: false, logLevel: "silent", plugins: [annotateAnything({ dir, inject: false })], server: { port: 0, host: "127.0.0.1", allowedHosts: ["app.example.org"] } });
+  await vite.listen();
+  try {
+    expect(await get(portOf(plain), "localhost:3000")).toBe(200);
+    expect(await get(portOf(plain), "192.168.1.20:3000")).toBe(200);
+    expect(await get(portOf(plain), "attacker.example:3000")).toBe(403);
+    expect(await get(portOf(allowed), "app.example.org")).toBe(200);
+    expect(await get(portOf(allowed), "a.team.example")).toBe(200);
+    expect(await get(portOf(allowed), "attacker.example")).toBe(403);
+    expect(await get(portOf(open), "attacker.example")).toBe(200);
+    expect(await get(portOf(vite.httpServer as http.Server), "app.example.org")).toBe(200);
+
+    const request = (host: string) => new Request(`http://${host}/api/annotate/feedback`, { headers: { host } });
+    expect((await annotateRoute({ dir, enabled: true }).GET(request("localhost:3000"))).status).toBe(200);
+    expect((await annotateRoute({ dir, enabled: true }).GET(request("attacker.example:3000"))).status).toBe(403);
+    expect((await annotateRoute({ dir, enabled: true, allowedHosts: ["attacker.example"] }).GET(request("attacker.example:3000"))).status).toBe(200);
+  } finally {
+    plain.close();
+    allowed.close();
+    open.close();
+    await vite.close();
+  }
+});

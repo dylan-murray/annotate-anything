@@ -146,8 +146,13 @@ bookmarklet to your bookmarks bar, then click it on any local page without
 changing its code. Pages on custom local domains need
 `--origin http://app.example.test:3000`.
 
-The server only listens on this machine (127.0.0.1 and ::1), and it refuses
-requests addressed to any other host name.
+The server only listens on this machine (127.0.0.1 and ::1).
+
+Every setup refuses requests addressed to a host name that isn't local (`localhost`,
+private addresses, `.test`, `.local`, `.internal`, `.lan`), so a website can't
+reach your notes by pointing its own domain at your machine. Using a tunnel or a
+public dev domain? Add it with `allowedHosts: ["dev.example.com"]` on the
+middleware or Next route; the Vite plugin follows Vite's `server.allowedHosts`.
 
 ## 🛠️ Hooks and options
 

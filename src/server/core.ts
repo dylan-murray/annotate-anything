@@ -53,6 +53,9 @@ export interface CoreOptions {
   // Other origins allowed to call the API from a browser (the standalone server
   // allows any local origin). Same-origin requests are always allowed.
   allowOrigin?: (origin: string) => boolean;
+  // Host names this answers to besides local ones: exact names, ".example.com" for a
+  // domain and its subdomains, or true for any host.
+  allowedHosts?: string[] | true;
   // Run even when NODE_ENV is production. Off by default.
   enabled?: boolean;
   // Source of the script-tag bundle served at <base>/client.js.
@@ -88,6 +91,18 @@ export function isLocalOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     return (u.protocol === "http:" || u.protocol === "https:") && LOCAL_HOST.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+// A request must name a local host or an allowed one. Any other Host is a site that
+// pointed its own domain at this machine (DNS rebinding) to look same-origin.
+export function isKnownHost(host: string, allowed?: string[] | true): boolean {
+  if (allowed === true) return true;
+  try {
+    const name = new URL(`http://${host}`).hostname;
+    return LOCAL_HOST.test(name) || !!allowed?.some((a) => (a.startsWith(".") ? name === a.slice(1) || name.endsWith(a) : name === a));
   } catch {
     return false;
   }
@@ -183,6 +198,14 @@ export function createCore(options: CoreOptions = {}) {
   async function handle(req: CoreRequest): Promise<CoreResponse | null> {
     const pathname = req.url.split("?")[0]!;
     if (pathname !== base && !pathname.startsWith(base + "/")) return null;
+    const host = req.header("host");
+    if (host && !isKnownHost(host, options.allowedHosts)) {
+      return {
+        status: 403,
+        headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
+        body: JSON.stringify({ error: `annotate-anything doesn't answer to ${host}; add it to allowedHosts if you trust it` }),
+      };
+    }
     const origin = req.header("origin");
     let sameOrigin = true;
     if (origin) {

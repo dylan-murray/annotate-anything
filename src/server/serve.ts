@@ -1,8 +1,7 @@
 import http from "node:http";
-import { createCore, isLocalOrigin } from "./core";
+import { createCore, isKnownHost, isLocalOrigin } from "./core";
 import { nodeRequest } from "./node";
 import { clientBundle } from "./client-file";
-import { LOCAL_HOST } from "../local";
 
 export interface ServeOptions {
   port?: number;
@@ -34,20 +33,10 @@ function page(base: string): string {
 // the client from here and talk to it cross-origin.
 export function startServer(options: ServeOptions = {}): http.Server {
   const origins = new Set(options.origins ?? []);
-  const named = new Set([...origins].map((o) => new URL(o).hostname));
-  const core = createCore({ dir: options.dir, command: options.command, enabled: true, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
-  // A request must name this machine (or an --origin host). Any other Host is a site that
-  // pointed its own domain at 127.0.0.1 (DNS rebinding) to look same-origin.
-  const knownHost = (host = "") => {
-    try {
-      const name = new URL(`http://${host}`).hostname;
-      return LOCAL_HOST.test(name) || named.has(name);
-    } catch {
-      return false;
-    }
-  };
+  const named = [...origins].map((o) => new URL(o).hostname);
+  const core = createCore({ dir: options.dir, command: options.command, enabled: true, allowedHosts: named, clientScript: clientBundle, allowOrigin: (o) => origins.has(o) || isLocalOrigin(o) });
   const handler: http.RequestListener = (req, res) => {
-    if (!knownHost(req.headers.host)) {
+    if (!isKnownHost(req.headers.host ?? "", named)) {
       res.writeHead(403, { "Content-Type": "text/plain" }).end("annotate-anything only answers requests addressed to this machine");
       return;
     }

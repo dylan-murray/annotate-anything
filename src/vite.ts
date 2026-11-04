@@ -100,7 +100,9 @@ export default function annotateAnything(options: PluginOptions = {}): Plugin {
       return `import { annotate } from "annotate-anything";\nwindow.annotateAnything ??= annotate(${JSON.stringify(client)});\n`;
     },
     configureServer(server) {
-      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit, targets: options.targets }));
+      // Vite has already vetted the Host against its own list.
+      const allowedHosts = server.config.server.allowedHosts;
+      server.middlewares.use(createMiddleware({ dir, base, onSubmit: options.onSubmit, targets: options.targets, allowedHosts }));
       if (options.inject !== false) server.middlewares.use(injectIntoHtml);
     },
     transformIndexHtml: {
