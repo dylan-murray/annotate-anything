@@ -10,7 +10,8 @@ const work = mkdtempSync(join(tmpdir(), "aa-package-"));
 const npm = (args, cwd) => execFileSync("npm", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 
 try {
-  const [packed] = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", work], root));
+  const output = npm(["pack", "--json", "--ignore-scripts", "--pack-destination", work], root);
+  const [packed] = JSON.parse(output.slice(output.search(/^\[\s*$/m)));
   const files = packed.files.map((f) => f.path);
   const stray = files.filter((f) => !/^(dist\/|agent\/|package\.json$|README\.md$|LICENSE$)/.test(f));
   if (stray.length) throw new Error(`Unexpected files in the package: ${stray.join(", ")}`);
