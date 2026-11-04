@@ -395,6 +395,7 @@ export class Annotator {
     const f = on ? "addEventListener" : "removeEventListener";
     window[f]("resize", this.onResize);
     document[f]("scroll", this.onScroll, { capture: true });
+    document[f]("load", this.onLoaded, { capture: true });
     window[f]("popstate", this.onRoute);
     window[f]("hashchange", this.onRoute);
     window[f]("annotate-anything:route", this.onRoute);
@@ -425,6 +426,11 @@ export class Annotator {
     if (this.open) this.placeBar();
   };
   private onScroll = () => this.schedule();
+  // An iframe finishing its load doesn't mutate this page, but its notes can now find their targets.
+  private onLoaded = () => {
+    this.dirtyAnchors = true;
+    this.schedule();
+  };
   private onVisible = () => {
     if (!document.hidden && this.transport.kind === "http") void this.pull();
   };

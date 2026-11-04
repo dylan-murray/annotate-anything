@@ -454,3 +454,19 @@ test("jumping to a note shows its latest state when an update lands during the j
   release();
   await expect(t.panel.locator(".reply")).toContainText("Tightened it.");
 });
+
+test("a note inside an iframe finds its target when the iframe loads late", async ({ page }) => {
+  await load(page, "/widgets");
+  const frame = page.frameLocator("[data-testid=frame]");
+  await page.getByTestId("frame").scrollIntoViewIfNeeded();
+  await note(page, "element", frame.locator(".frame-copy"), "Shorter frame copy");
+  await page.keyboard.press("Escape");
+  await expect.poll(() => stored().notes.length).toBe(1);
+
+  await page.route("**/frame.html", async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  await page.reload();
+  await expect(ui(page).mark(1)).not.toHaveClass(/detached/);
+});
