@@ -66,6 +66,7 @@ const KNOWN: [RegExp, string][] = [
 // Best effort: AI_AGENT is a cross-tool convention (Claude Code sets it), the rest are
 // variables individual agents set. Agents can always pass --agent instead.
 export function detectAgent(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (env.CODEX_SANDBOX || env.CODEX_THREAD_ID || env.CODEX_MANAGED_BY_NPM) return "Codex";
   const ai = env.AI_AGENT?.trim();
   if (ai) {
     const hit = KNOWN.find(([re]) => re.test(ai));
@@ -74,7 +75,6 @@ export function detectAgent(env: NodeJS.ProcessEnv = process.env): string | unde
     return word ? word[0]!.toUpperCase() + word.slice(1) : undefined;
   }
   if (env.CLAUDECODE) return "Claude";
-  if (env.CODEX_SANDBOX || env.CODEX_THREAD_ID || env.CODEX_MANAGED_BY_NPM) return "Codex";
   if (env.GEMINI_CLI) return "Gemini";
   if (env.CURSOR_AGENT) return "Cursor";
   if (env.OPENCODE) return "OpenCode";

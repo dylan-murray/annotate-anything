@@ -6,7 +6,7 @@ import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { createCore, fromElsewhere, isLoopbackOrigin, type CoreRequest } from "../src/server/core";
-import { findNotesDirs } from "../src/server/locate";
+import { detectAgent, findNotesDirs } from "../src/server/locate";
 import { nodeRequest } from "../src/server/node";
 import { dump, FileStore } from "../src/server/store";
 import { Watcher } from "../src/server/watcher";
@@ -259,4 +259,10 @@ test("CommonJS projects can load the package", () => {
   expect(out.stdout.trim()).toBe("function");
   const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
   for (const v of Object.values(pkg.exports)) if (typeof v === "object") expect(v).toHaveProperty("default");
+});
+
+test("an agent started from another agent goes by its own name", () => {
+  expect(detectAgent({ AI_AGENT: "claude-code", CLAUDECODE: "1", CODEX_THREAD_ID: "thread-1" })).toBe("Codex");
+  expect(detectAgent({ AI_AGENT: "claude-code", CLAUDECODE: "1" })).toBe("Claude");
+  expect(detectAgent({})).toBeUndefined();
 });
