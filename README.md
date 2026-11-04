@@ -4,7 +4,7 @@
     <img src="docs/images/wordmark-light.svg" alt="annotate-anything" width="300">
   </picture>
   <br>
-  Click on any running web app, leave notes, and send them to your coding agent
+  A visual engineering tool for leaving notes and sending them straight to your agent.
 </h4>
 
 <p align="center">
