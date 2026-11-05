@@ -44,8 +44,8 @@ svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .mark:hover,.mark.current{transform:translate(-50%,-50%) scale(1.12)}
 .mark.current{box-shadow:0 0 0 3px color-mix(in srgb,var(--aa-accent) 28%,transparent),0 1px 5px rgba(0,0,0,.22)}
 .mark.current{color:var(--aa-on-accent)}
-.mark.d3,.dot.d3{font-size:8.5px}
-.mark.d4,.dot.d4{font-size:6.5px}
+.mark.d3,.dot.d3{font-size:8px}
+.mark.d4,.dot.d4{font-size:6px}
 .mark.sent{background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff}
 .mark.working{background:linear-gradient(135deg,#d97706,#fbbf24);color:#fff}
 .mark.resolved{background:linear-gradient(135deg,#059669,#34d399);color:#fff}
