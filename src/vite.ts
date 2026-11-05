@@ -15,6 +15,7 @@ export interface PluginOptions {
     agentName?: string;
     stableAttributes?: string[];
     theme?: Record<string, string>;
+    colorScheme?: "light" | "dark" | "auto";
     watchCommand?: string;
   };
   inject?: boolean;

@@ -215,9 +215,13 @@ Set CSS custom properties on the `annotate-anything` element, or pass
 annotate-anything { --aa-accent: #2f6b4f; --aa-ink: #1f2a24; --aa-font: 13px/1.4 "Inter", sans-serif; }
 ```
 
+The bar matches your app: it reads the page's background, and uses the system's
+light or dark setting if the page doesn't have one. Pass `client.colorScheme:
+"light"` or `"dark"` to pick one yourself.
+
 The tokens are `ink`, `ink-2`, `ink-hover`, `text`, `muted`, `line`, `edge`,
-`divider`, `hover`, `accent`, `accent-hover`, `on-accent`, `sent`, `working`,
-`resolved`, `danger`, `shadow`, `launcher-ring`, `radius` and `font`, each as
+`divider`, `hover`, `accent`, `accent-2`, `accent-soft`, `accent-soft-hover`, `on-accent`, `sent`, `working`,
+`resolved`, `danger`, `shadow`, `launcher`, `launcher-ring`, `mark-edge`, `radius` and `font`, each as
 `--aa-<name>`.
 
 ## 🧑‍💻 Development
