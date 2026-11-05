@@ -92,7 +92,7 @@ export class Watcher {
         continue;
       }
       try {
-        this.store.pickUp(submission.noteIds);
+        this.store.pickUp(submission.noteIds, this.store.agent());
       } catch {
         break;
       }

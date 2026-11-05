@@ -91,6 +91,7 @@ export class Annotator {
   private pending = new Map<string, { status: Status; at: number }>();
   private watching = false;
   private agentFromServer: string | undefined;
+  private picks = false;
   private connected = true;
   private ready = false;
   private open = false;
@@ -307,13 +308,14 @@ export class Annotator {
         continue;
       }
       const newer = Date.parse(theirs.updatedAt) > Date.parse(mine.updatedAt) ? { comment: theirs.comment, updatedAt: theirs.updatedAt } : {};
-      out.push({ ...mine, ...newer, n: theirs.n, status: theirs.status, sentAt: theirs.sentAt, pickedUpAt: theirs.pickedUpAt, reply: theirs.reply, resolvedAt: theirs.resolvedAt });
+      out.push({ ...mine, ...newer, n: theirs.n, status: theirs.status, sentAt: theirs.sentAt, pickedUpAt: theirs.pickedUpAt, reply: theirs.reply, resolvedAt: theirs.resolvedAt, agent: theirs.agent });
     }
     for (const theirs of server.values()) if (!deleted.has(theirs.id) && this.mine(theirs)) out.push(theirs);
     this.notes = out;
     this.deleted = [...deleted];
     this.watching = !!state.watching;
     this.agentFromServer = state.agent;
+    this.picks = !!state.picks;
     this.save();
   }
 
@@ -324,7 +326,7 @@ export class Annotator {
     this.merge(state);
     const finished = this.notes.filter((n) => n.status === "resolved" && (was.get(n.id) === "sent" || was.get(n.id) === "working"));
     if (finished.length)
-      this.flash(`${this.who(true)} finished ${finished.length === 1 ? `note ${finished[0]!.n}` : `notes ${finished.map((n) => n.n).join(", ")}`}.`);
+      this.flash(`${this.who(true, this.shared(finished))} finished ${finished.length === 1 ? `note ${finished[0]!.n}` : `notes ${finished.map((n) => n.n).join(", ")}`}.`);
     this.connected = true;
     this.ready = true;
     if (this.panel && !this.panel.isNew) {
@@ -673,7 +675,8 @@ export class Annotator {
     if (this.needsAgent()) return this.lastSent ? `Sent at ${clock(this.lastSent)} · no agent attached` : "No agent attached";
     if (this.lastSent) return `Sent at ${clock(this.lastSent)}`;
     if (this.watching) return `Connected · ${this.who()} is listening`;
-    return this.offers ? "Connected · Send lets you pick an agent" : "Connected · no agent attached yet";
+    if (this.offers) return this.targets.length ? "Connected · Send lets you pick an agent" : "Connected · no agent is running to send to yet";
+    return "Connected · no agent attached yet";
   }
 
   // Sent, but no agent was listening and none was picked.
@@ -682,7 +685,7 @@ export class Annotator {
   }
 
   private get offers() {
-    return this.targets.length > 0;
+    return this.targets.length > 0 || this.picks;
   }
 
   // The agent Send goes to without asking: the last one picked, while it is still open.
@@ -740,12 +743,12 @@ export class Annotator {
     const working = this.notes.filter((n) => n.status === "working");
     if (working.length) {
       const latest = working.filter((n) => n.reply).sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1))[0];
-      return `${this.who(true)} is working on ${plural(working.length, "note")}` + (latest?.reply ? ` · ${latest.reply}` : "");
+      return `${this.who(true, this.shared(working))} is working on ${plural(working.length, "note")}` + (latest?.reply ? ` · ${latest.reply}` : "");
     }
     const sent = this.notes.filter((n) => n.status === "sent");
     if (!sent.length) return "";
     const picked = sent.filter((n) => n.pickedUpAt);
-    if (picked.length) return `${this.who(true)} picked up ${plural(picked.length, "note")} at ${clock(picked.map((n) => n.pickedUpAt!).sort().at(-1))} · starting soon`;
+    if (picked.length) return `${this.who(true, this.shared(picked))} picked up ${plural(picked.length, "note")} at ${clock(picked.map((n) => n.pickedUpAt!).sort().at(-1))} · starting soon`;
     const at = sent.map((n) => n.sentAt ?? "").sort().at(-1);
     return this.watching || this.delivered
       ? `Sent to ${this.who()} at ${clock(at)} · waiting for ${this.who()} to pick it up`
@@ -756,14 +759,21 @@ export class Annotator {
     return this.options.agentName ?? this.agentFromServer;
   }
 
-  private who(start = false): string {
-    return this.agentName() ?? (start ? "Your agent" : "your agent");
+  // A note names the agent it went to; without one, the agent this page last sent to.
+  private who(start = false, note?: Pick<Note, "agent">): string {
+    return note?.agent ?? this.agentName() ?? (start ? "Your agent" : "your agent");
+  }
+
+  // The agent several notes share, when they all went to the same one.
+  private shared(notes: Note[]): Pick<Note, "agent"> | undefined {
+    const names = new Set(notes.map((n) => n.agent));
+    return names.size === 1 ? notes[0] : undefined;
   }
 
   private stateLabel(n: Note): string {
     if (n.status === "open") return "not sent";
     if (n.status === "resolved") return "done";
-    if (n.status === "working") return `${this.who()} working`;
+    if (n.status === "working") return `${this.who(false, n)} working`;
     return n.pickedUpAt ? "picked up" : "sent";
   }
 
@@ -998,20 +1008,20 @@ export class Annotator {
     else {
       const progress =
         n.status === "working"
-          ? n.reply || `${this.who(true)} is working on this.`
+          ? n.reply || `${this.who(true, n)} is working on this.`
           : n.status === "sent"
             ? n.pickedUpAt
-              ? `${this.who(true)} picked this up at ${clock(n.pickedUpAt)}.`
+              ? `${this.who(true, n)} picked this up at ${clock(n.pickedUpAt)}.`
               : this.unheard(n)
                 ? this.offers
                   ? `Sent at ${clock(n.sentAt)}. No agent has it yet.`
                   : `Sent at ${clock(n.sentAt)}. No agent is attached yet.`
-                : `Sent to ${this.who()} at ${clock(n.sentAt)}, waiting for ${this.who()} to pick it up.`
+                : `Sent to ${this.who(false, n)} at ${clock(n.sentAt)}, waiting for ${this.who(false, n)} to pick it up.`
             : "";
       this.panelEl.innerHTML =
         head +
         `<p class="comment">${esc(n.comment)}</p>` +
-        (n.reply && n.status === "resolved" ? `<div class="reply"><b>${esc(this.agentName() ?? "Agent")}</b>${esc(n.reply)}</div>` : "") +
+        (n.reply && n.status === "resolved" ? `<div class="reply"><b>${esc(n.agent ?? this.agentName() ?? "Agent")}</b>${esc(n.reply)}</div>` : "") +
         (progress ? `<div class="waiting"><i class="spinner"></i><span role="status">${esc(progress)}</span>${this.unheard(n) && !this.offers ? this.copyHtml() : ""}</div>` : "") +
         `<div class="foot"><button type="button" class="btn trash danger" data-act="delete" aria-label="Delete note" title="Delete note">${ICON.trash}</button><span class="hint"></span>${
           n.status === "resolved"
@@ -1166,6 +1176,10 @@ export class Annotator {
     this.targets = targets;
     if (!targets.length) {
       this.picking = null;
+      if (this.picks) {
+        this.flash("No agent is running to send to. Start one, then press Send. Your notes are still here.");
+        return this.renderBar();
+      }
       return this.send();
     }
     const focused = (this.shadow.activeElement as HTMLElement | null)?.dataset?.target;

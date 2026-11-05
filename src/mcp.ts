@@ -90,7 +90,7 @@ export function serve(locate: () => FileStore | null, agent?: string, version = 
       const refs = Array.isArray(args.notes) ? args.notes.map(String) : [];
       const status = args.status as Status;
       if (!refs.length || !["working", "resolved", "open"].includes(status)) return text("Pass notes and a status of working, resolved or open.", true);
-      const notes = store.setStatus(refs, status, typeof args.reply === "string" ? args.reply : undefined);
+      const notes = store.setStatus(refs, status, typeof args.reply === "string" ? args.reply : undefined, agent);
       const missing = refs.filter((r) => !notes.some((n) => n.id === r.replace(/^#/, "") || String(n.n) === r.replace(/^#/, "")));
       const lines = notes.map((n) => `#${n.n} ${n.status}`);
       if (missing.length) lines.push(`No note ${missing.join(", ")}`);

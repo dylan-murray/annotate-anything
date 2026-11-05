@@ -164,7 +164,7 @@ function main(argv: string[]): number | Promise<number> {
       console.error('Usage: annotate-anything status <n...> <working|resolved|open> [--reply "text"]');
       return 2;
     }
-    const notes = store.setStatus(refs, status, values.reply);
+    const notes = store.setStatus(refs, status, values.reply, agent);
     const missing = refs.filter((r) => !notes.some((n) => n.id === r.replace(/^#/, "") || String(n.n) === r.replace(/^#/, "")));
     for (const n of notes) console.log(`#${n.n} ${n.status}${n.reply ? ` · ${n.reply}` : ""}`);
     if (missing.length) console.error(`No note ${missing.join(", ")}`);

@@ -145,7 +145,7 @@ export function createCore(options: CoreOptions = {}) {
     } catch {}
   }
   const base = (options.base ?? "/__annotate").replace(/\/$/, "");
-  const state = () => ({ ...store.read(), watching: store.watching(), agent: store.agent() });
+  const state = () => ({ ...store.read(), watching: store.watching(), agent: store.agent(), picks: !!options.targets });
 
   async function json(req: CoreRequest, limit: number): Promise<Record<string, unknown>> {
     if (Number(req.header("content-length") ?? 0) > limit) throw new HttpError(413, "Request too large");
@@ -200,7 +200,7 @@ export function createCore(options: CoreOptions = {}) {
         }
       }
       if (delivery?.ok) {
-        store.pickUp(result.submission!.noteIds);
+        store.pickUp(result.submission!.noteIds, agent);
         if (agent) store.setAgent(agent);
       }
       // With a target and no hook here, a server in front of this one delivers; it gets the prompt.
