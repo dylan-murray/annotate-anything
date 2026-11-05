@@ -282,6 +282,7 @@ test("clicking a mark leaves a collapsed bar collapsed", async ({ page }) => {
   await expect(t.toolbar).toBeHidden();
 
   await t.mark(1).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r)));
   await t.textarea.fill("Edited while collapsed");
   await t.act("save").click();
   await expect(t.panel).toBeHidden();

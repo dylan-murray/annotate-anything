@@ -11,9 +11,9 @@ const LIGHT: Record<string, string> = {
 const DARK: Record<string, string> = {
   ink: "#1d2630", "ink-2": "#27323e", "ink-hover": "#323e4c", text: "#f1f6fb", muted: "#aebbc9",
   line: "#384553", edge: "rgba(241,246,251,.09)", divider: "#2b3643", hover: "#28333f",
-  accent: "#7dd3fc", "accent-2": "#a5b4fc", "on-accent": "#06263a",
+  accent: "#38bdf8", "accent-2": "#818cf8", "on-accent": "#06263a",
   sent: "#b794ff", working: "#fbbf24", resolved: "#34d399", danger: "#fb7185",
-  "accent-soft": "rgba(125,211,252,.17)", "accent-soft-hover": "rgba(125,211,252,.28)",
+  "accent-soft": "rgba(56,189,248,.17)", "accent-soft-hover": "rgba(56,189,248,.28)",
   shadow: "0 20px 50px rgba(0,0,0,.5)", launcher: "#1d2630", "launcher-ring": "rgba(241,246,251,.14)", "mark-edge": "#1d2630",
 };
 
