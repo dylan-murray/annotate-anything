@@ -82,6 +82,8 @@ export function cleanNote(raw: unknown): Note | null {
   if (resolvedAt) note.resolvedAt = resolvedAt;
   const reply = prose(r.reply, 20000);
   if (reply) note.reply = reply;
+  const agent = line(r.agent, 60);
+  if (agent) note.agent = agent;
   return note;
 }
 
@@ -238,7 +240,7 @@ export class FileStore {
     return state.notes.filter((n) => want.has(n.id) || want.has(String(n.n)));
   }
 
-  setStatus(refs: string[], status: Status, reply?: string): Note[] {
+  setStatus(refs: string[], status: Status, reply?: string, agent?: string): Note[] {
     if (!STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(", ")}`);
     return this.locked(() => {
       const state = this.read();
@@ -250,7 +252,8 @@ export class FileStore {
         if (status === "open") {
           delete n.sentAt;
           delete n.pickedUpAt;
-        }
+          delete n.agent;
+        } else if (agent?.trim()) n.agent = line(agent, 60);
         if (status === "resolved") n.resolvedAt = t;
         else delete n.resolvedAt;
         if (reply !== undefined) {
@@ -264,7 +267,7 @@ export class FileStore {
     });
   }
 
-  pickUp(ids: string[]): void {
+  pickUp(ids: string[], agent?: string): void {
     this.locked(() => {
       const state = this.read();
       const want = new Set(ids);
@@ -273,6 +276,7 @@ export class FileStore {
       for (const n of state.notes)
         if (want.has(n.id) && n.status === "sent" && !n.pickedUpAt) {
           n.pickedUpAt = t;
+          if (agent?.trim()) n.agent = line(agent, 60);
           changed = true;
         }
       if (changed) this.write(state);

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createCore, type CoreOptions } from "../src/server/core";
+import type { Note } from "../src/types";
 
 test("one script tag and the plain Node middleware are enough", async ({ page }) => {
   const errors: string[] = [];
@@ -149,6 +150,80 @@ test("when the server offers agents, Send asks which one and says where the note
   await main.click();
   await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to API agent.");
   expect((await (await request.get("http://localhost:5197/delivered")).json()).at(-1).prompt).toContain("Second note");
+});
+
+test("a host that offers agents says so, and each note keeps the agent it went to", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-picks-"));
+  const get = async (core: ReturnType<typeof createCore>) =>
+    JSON.parse((await core.handle({ method: "GET", url: "/__annotate/feedback", header: (h) => ({ host: "localhost" })[h], body: () => Promise.resolve("") }))!.body);
+  expect((await get(createCore({ dir }))).picks).toBe(false);
+  const core = createCore({ dir, targets: () => [], onSubmit: (b) => ({ to: b.agent!, ok: true }) });
+  expect((await get(core)).picks).toBe(true);
+  const note = (id: string, n: number) => ({ id, n, kind: "pin", route: "/", comment: `Note ${n}`, tag: "", createdAt: new Date().toISOString() });
+  await post(core, "/__annotate/feedback", { notes: [note("a", 1), note("b", 2)], deleted: [] });
+  await post(core, "/__annotate/feedback/submit", { noteIds: ["a"], route: "/", target: "ui", agent: "UI agent" });
+  await post(core, "/__annotate/feedback/submit", { noteIds: ["b"], route: "/", target: "api", agent: "API agent" });
+  const agents = () => Object.fromEntries(core.store.read().notes.map((n) => [n.id, n.agent]));
+  expect(agents()).toEqual({ a: "UI agent", b: "API agent" });
+  await post(core, "/__annotate/feedback", { notes: [{ ...note("a", 1), agent: "Someone else", updatedAt: new Date(Date.now() + 5000).toISOString() }], deleted: [] });
+  expect(agents().a).toBe("UI agent");
+  core.store.setStatus(["2"], "working", undefined, "Codex");
+  expect(agents().b).toBe("Codex");
+  core.store.setStatus(["1"], "open");
+  expect(agents().a).toBeUndefined();
+});
+
+test("each note names the agent it went to, and with no agent running Send says so instead of sending", async ({ page, request }) => {
+  fs.rmSync(process.env.AA_TEST_DIR + "-static-agents", { recursive: true, force: true });
+  await request.post("http://localhost:5197/agents-running?on=true");
+  await page.goto("http://localhost:5197/agents");
+  const host = page.locator("annotate-anything");
+  const note = async (selector: string, text: string) => {
+    const b = (await page.locator(selector).boundingBox())!;
+    await page.mouse.click(b.x + 20, b.y + b.height / 2);
+    await page.keyboard.type(text);
+    await page.keyboard.press("ControlOrMeta+Enter");
+  };
+  await host.locator(".launcher").click();
+  await host.locator(".tool[data-mode=element]").click();
+  await note("#headline", "Shorter headline");
+  await host.locator(".send").click();
+  await host.locator("li[data-target]", { hasText: "UI agent" }).click();
+  await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to UI agent.");
+  await note(".intro", "Warmer intro");
+  await host.locator(".send.more").click();
+  await host.locator("li[data-target]", { hasText: "API agent" }).click();
+  await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to API agent.");
+  for (const [n, reply] of [[1, "Cut it to five words."], [2, "Rewrote it in the second person."]] as const)
+    await request.post("http://localhost:5197/__agents/feedback/status", { data: { ids: [String(n)], status: "resolved", reply } });
+  await host.locator(".tool[data-mode=element]").click();
+  for (const [n, agent, reply] of [[1, "UI agent", "Cut it to five words."], [2, "API agent", "Rewrote it in the second person."]] as const) {
+    await expect(host.locator(`.mark[aria-label="Note ${n}"]`)).toHaveClass(/resolved/);
+    await host.locator(`.mark[aria-label="Note ${n}"]`).click();
+    await expect(host.locator(".panel .reply")).toContainText(reply);
+    await expect(host.locator(".panel .reply b")).toHaveText(agent);
+    await page.keyboard.press("Escape");
+  }
+
+  await request.post("http://localhost:5197/agents-running?on=false");
+  try {
+    const sent = (await (await request.get("http://localhost:5197/delivered")).json()).length;
+    await page.reload();
+    await host.locator(".launcher").click();
+    await expect(host.locator(".toolbar .status")).toContainText("no agent is running to send to yet");
+    await expect(host.locator(".toolbar .copy")).toHaveCount(0);
+    await host.locator(".tool[data-mode=element]").click();
+    await note("#headline", "Bigger headline");
+    await host.locator(".send").click();
+    await expect(host.locator(".toolbar .status")).toContainText("No agent is running to send to");
+    await expect(host.locator(".toolbar .copy")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("no-agent-running.png") });
+    const stored = () => JSON.parse(fs.readFileSync(process.env.AA_TEST_DIR + "-static-agents/feedback.json", "utf8")).notes.find((n: Note) => n.comment === "Bigger headline")?.status;
+    await expect.poll(stored).toBe("open");
+    expect((await (await request.get("http://localhost:5197/delivered")).json()).length).toBe(sent);
+  } finally {
+    await request.post("http://localhost:5197/agents-running?on=true");
+  }
 });
 
 test("the standalone server answers only on this machine and only to local host names", async () => {

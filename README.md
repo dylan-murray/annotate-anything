@@ -182,10 +182,15 @@ annotateAnything({
 })
 ```
 
+Each note keeps the agent it went to, so its progress and reply name the right
+one when you send to several. With `targets` set there's no agent to attach, so
+the bar doesn't offer the attach prompt, and Send says so when none is running.
+
 A server in front of the notes server can do the same: answer
-`GET <base>/targets` itself, and deliver the `handoff` that `/feedback/submit`
-returns when the request names a target. Pass `headers` to `annotate()` if that
-server wants an auth header.
+`GET <base>/targets` itself, deliver the `handoff` that `/feedback/submit`
+returns when the request names a target, and add `picks: true` to its
+`GET <base>/feedback` answer. A custom transport returns `picks: true` from
+`pull()`. Pass `headers` to `annotate()` if that server wants an auth header.
 
 ### In code
 

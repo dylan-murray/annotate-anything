@@ -101,14 +101,14 @@ No `<form>` or submit buttons in the tool, since host selectors like
 ## Data
 
 Note: `id (uuid), n, kind (pin|element|area), route, comment, createdAt,
-updatedAt, sentAt?, status (open|sent|working|resolved), reply?, resolvedAt?,
+updatedAt, sentAt?, pickedUpAt?, status (open|sent|working|resolved), reply?, resolvedAt?, agent?,
 selector, testId?, tag, targetText, x, y, bounds, offset?, scroll, viewport,
 inDialog, context`. See `src/types.ts`.
 
 Submission: `id, submittedAt, route, noteIds, excerpts`.
 
 Browser localStorage is the working copy. The server copy is merged per id
-(`{...stored, ...incoming}`); the browser never sends `status` or `reply`, so
+(`{...stored, ...incoming}`); the browser never sets `status`, `reply` or `agent`, so
 a sync can't overwrite the agent. Deletes and clears are tombstones, fetched
 before cached notes render so deleted marks don't flash back.
 

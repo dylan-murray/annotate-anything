@@ -24,6 +24,8 @@ export interface Note {
   status: Status;
   reply?: string;
   resolvedAt?: string;
+  // The agent the note went to, as the page names it.
+  agent?: string;
   selector: string;
   testId?: string;
   tag: string;
@@ -54,6 +56,8 @@ export interface FeedbackState {
   deleted: string[];
   watching: boolean;
   agent?: string;
+  // The host picks a running agent at Send, so there's no agent to attach.
+  picks?: boolean;
 }
 
 // A running agent the host app can deliver notes to, offered when Send is pressed.
@@ -71,4 +75,4 @@ export interface SubmitResult {
   delivery?: { to: string; ok: boolean; detail?: string };
 }
 
-export const LIFECYCLE = ["status", "sentAt", "pickedUpAt", "reply", "resolvedAt"] as const;
+export const LIFECYCLE = ["status", "sentAt", "pickedUpAt", "reply", "resolvedAt", "agent"] as const;
