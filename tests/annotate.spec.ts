@@ -387,7 +387,7 @@ test("notes reach inside open shadow roots and same-origin iframes, and follow t
   const over = async (n: number, target: ReturnType<typeof page.locator>) => {
     const m = (await t.mark(n).boundingBox())!;
     const r = (await target.boundingBox())!;
-    return Math.abs(m.x + 6 - r.x) < 4 && Math.abs(m.y + 11 - r.y) < 4;
+    return Math.abs(m.x + m.width / 2 - r.x) < 4 && Math.abs(m.y + m.height / 2 - r.y) < 4;
   };
   await expect.poll(() => over(1, shadowButton)).toBe(true);
   await expect.poll(() => over(2, frame.locator(".frame-copy"))).toBe(true);

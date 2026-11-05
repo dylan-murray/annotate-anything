@@ -1,6 +1,7 @@
 import { containing, cssPath, elementAt, find, inDialog, labelFor, place, rectOf, rootsOf, scrollableAt, stableAttr, textOf, topLayer, within, type Placed } from "./anchor.js";
 import { ICON } from "./icons.js";
 import { css } from "./styles.js";
+import { pageScheme, type Scheme } from "./scheme.js";
 import { clipboard, http, local, type PageInfo, type Transport } from "./transport.js";
 import type { Box, FeedbackState, Kind, Mode, Note, Status, Target } from "./types.js";
 
@@ -17,6 +18,7 @@ export interface Options {
   navigate?: (route: string) => void | Promise<void>;
   controls?: HTMLElement[];
   theme?: Record<string, string>;
+  colorScheme?: Scheme | "auto";
 }
 
 interface Panel {
@@ -40,6 +42,7 @@ const LAYOUT_ATTRS = ["class", "style", "hidden", "open", "aria-hidden", "aria-e
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const now = () => new Date().toISOString();
+const digits = (n: number) => (n >= 1000 ? " d4" : n >= 100 ? " d3" : "");
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const clock = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -66,6 +69,14 @@ export class Annotator {
   private q: <T extends Element = HTMLElement>(s: string) => T;
   private layer: HTMLElement;
   private hoverBox: HTMLElement;
+  private schemeObserver?: MutationObserver;
+  private schemeMedia?: MediaQueryList;
+  private schemeStop?: () => void;
+  private schemeTimer = 0;
+  private lastStatus = new Map<string, string>();
+  private marksHtml = "";
+  private barHtml = "";
+  private toolRect: DOMRect | null = null;
   private drawBox: HTMLElement;
   private marks: HTMLElement;
   private panelEl: HTMLElement;
@@ -139,6 +150,7 @@ export class Annotator {
     }))
       hs.setProperty(k, v, "important");
     this.setTheme(options.theme);
+    this.syncScheme();
     if ("showPopover" in this.host) this.host.setAttribute("popover", "manual");
     this.shadow = this.host.attachShadow({ mode: "open" });
     this.shadow.innerHTML = `<style>${css}</style><div class="root" part="root">
@@ -168,6 +180,7 @@ export class Annotator {
     this.wire();
     this.placeLauncher();
     this.attach();
+    this.watchScheme();
     this.modalObserver.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "aria-modal", "role"] });
     this.render();
     void this.start();
@@ -177,6 +190,42 @@ export class Annotator {
     el.slot = "controls";
     this.host.appendChild(el);
     this.renderBar();
+  }
+
+  private syncScheme = () => {
+    if (this.destroyed) return;
+    const chosen = this.options.colorScheme;
+    this.host.dataset.scheme = chosen && chosen !== "auto" ? chosen : pageScheme(this.host);
+  };
+
+  private watchScheme() {
+    const later = () => {
+      this.syncScheme();
+      clearTimeout(this.schemeTimer);
+      this.schemeTimer = window.setTimeout(this.syncScheme, 350);
+    };
+    this.schemeObserver = new MutationObserver(later);
+    const watch = () => {
+      for (const el of [document.documentElement, document.body]) {
+        if (el) this.schemeObserver!.observe(el, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-mode", "data-color-scheme", "data-bs-theme"] });
+      }
+    };
+    watch();
+    this.schemeMedia = matchMedia("(prefers-color-scheme:dark)");
+    this.schemeMedia.addEventListener("change", later);
+    this.schemeStop = () => {
+      this.schemeObserver?.disconnect();
+      this.schemeMedia?.removeEventListener("change", later);
+      removeEventListener("load", onLoad);
+      clearTimeout(this.schemeTimer);
+    };
+    const onLoad = () => {
+      removeEventListener("load", onLoad);
+      watch();
+      later();
+    };
+    if (document.readyState !== "complete") addEventListener("load", onLoad);
+    later();
   }
 
   setTheme(theme: Record<string, string> | undefined) {
@@ -196,6 +245,7 @@ export class Annotator {
 
   destroy() {
     this.destroyed = true;
+    this.schemeStop?.();
     this.setActive(false);
     this.setKeys(false);
     this.modalObserver.disconnect();
@@ -329,7 +379,7 @@ export class Annotator {
     clearTimeout(this.pollTimer);
     if (this.destroyed || this.transport.kind !== "http") return;
     const waiting = this.waiting().length > 0;
-    const need = this.open || waiting || !this.connected;
+    const need = this.open || !!this.panel || waiting || !this.connected;
     this.pollTimer = window.setTimeout(
       async () => {
         if (need && !document.hidden) await this.pull();
@@ -536,15 +586,37 @@ export class Annotator {
       .map(
         (n) =>
           (n.kind !== "pin" ? `<div class="area ${n.status}" data-area="${esc(n.id)}"></div>` : "") +
-          `<button type="button" class="mark k-${n.kind} ${n.status}" data-id="${esc(n.id)}" title="${esc(n.comment)}" aria-label="Note ${n.n}"><span>${n.status === "resolved" ? "✓" : n.n}</span></button>`,
+          `<button type="button" class="mark k-${n.kind} ${n.status}${digits(n.n)}" data-id="${esc(n.id)}" title="${esc(n.comment)}" aria-label="Note ${n.n}"><span>${n.status === "resolved" ? "✓" : n.n}</span></button>`,
       )
       .join("");
     if (p?.isNew)
       html +=
         (p.note.kind !== "pin" ? '<div class="area" data-area="new"></div>' : "") +
-        `<button type="button" class="mark k-${p.note.kind} current" data-id="new" aria-label="New note"><span>${p.note.n}</span></button>`;
-    this.marks.innerHTML = html;
+        `<button type="button" class="mark k-${p.note.kind} current${digits(p.note.n)}" data-id="new" aria-label="New note"><span>${p.note.n}</span></button>`;
+    if (html !== this.marksHtml) {
+      this.marksHtml = html;
+      this.marks.innerHTML = html;
+    }
     this.position();
+    this.celebrate();
+  }
+
+  private celebrate() {
+    const seen = new Map<string, string>();
+    for (const n of this.notes) {
+      seen.set(n.id, n.status);
+      if (n.status !== "resolved" || !this.lastStatus.has(n.id) || this.lastStatus.get(n.id) === "resolved") continue;
+      const mark = this.marks.querySelector<HTMLElement>(`[data-id="${CSS.escape(n.id)}"]`);
+      if (!mark || mark.hidden) continue;
+      const r = mark.getBoundingClientRect();
+      const burst = document.createElement("div");
+      burst.className = "burst";
+      burst.style.left = r.left + r.width / 2 - 11 + "px";
+      burst.style.top = r.top + r.height / 2 - 11 + "px";
+      this.marks.parentElement!.append(burst);
+      setTimeout(() => burst.remove(), 800);
+    }
+    this.lastStatus = seen;
   }
 
   private position() {
@@ -598,9 +670,10 @@ export class Annotator {
     if (u) return `${plural(u, "note")} waiting · press Send`;
     if (t === "local") return "No agent connection · notes stay in this browser";
     if (t === "clipboard") return "Copy mode · Copy puts your notes on the clipboard to paste into your agent";
+    if (this.needsAgent()) return this.lastSent ? `Sent at ${clock(this.lastSent)} · no agent attached` : "No agent attached";
     if (this.lastSent) return `Sent at ${clock(this.lastSent)}`;
     if (this.watching) return `Connected · ${this.who()} is listening`;
-    return this.offers ? "Connected · Send lets you pick an agent" : `Connected · no agent attached yet · ask yours to run ${this.watchCmd()}`;
+    return this.offers ? "Connected · Send lets you pick an agent" : "Connected · no agent attached yet";
   }
 
   // Sent, but no agent was listening and none was picked.
@@ -620,11 +693,46 @@ export class Annotator {
   }
 
   private noAgent() {
-    return this.offers ? "no agent has it · open the note to send it to one" : `no agent attached · ask yours to run ${this.watchCmd()}`;
+    return this.offers ? "no agent has it · open the note to send it to one" : "no agent attached";
   }
 
   private watchCmd() {
     return this.options.watchCommand ?? "npx annotate-anything attach";
+  }
+
+  private agentPrompt() {
+    return `Run \`${this.watchCmd()}\` in this project, in the background if you can, and follow what it prints.`;
+  }
+
+  private needsAgent() {
+    return this.transport.kind === "http" && this.connected && !this.watching && !this.delivered && !this.offers;
+  }
+
+  private copyHtml() {
+    return `<button type="button" class="copy" data-act="copy-prompt" aria-label="Copy prompt for your agent" title="${esc(this.agentPrompt())}">${ICON.copy}<span>Copy prompt</span></button>`;
+  }
+
+  private unheardOnly() {
+    const sent = this.notes.filter((n) => n.status === "sent");
+    return !this.busy && sent.length > 0 && sent.every((n) => this.unheard(n)) && !this.notes.some((n) => n.status === "working");
+  }
+
+  private async copyPrompt(b: HTMLElement) {
+    try {
+      await navigator.clipboard.writeText(this.agentPrompt());
+    } catch {
+      this.flash("Your browser blocked copying. Select the prompt and copy it yourself.");
+      return;
+    }
+    const label = b.getAttribute("aria-label")!;
+    b.innerHTML = `${ICON.check}<span>Copied</span>`;
+    b.classList.add("copied");
+    b.setAttribute("aria-label", "Copied");
+    setTimeout(() => {
+      b.innerHTML = `${ICON.copy}<span>Copy prompt</span>`;
+      b.classList.remove("copied");
+      b.setAttribute("aria-label", label);
+    }, 1500);
   }
 
   private busyText(): string {
@@ -659,9 +767,32 @@ export class Annotator {
     return n.pickedUpAt ? "picked up" : "sent";
   }
 
+  private slideTool() {
+    const tool = this.bar.querySelector<HTMLElement>(".tool[data-mode].on");
+    const was = this.toolRect;
+    this.toolRect = tool ? tool.getBoundingClientRect() : null;
+    if (!tool || !was || !this.toolRect || Math.abs(was.left - this.toolRect.left) < 1) return;
+    if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+    tool.animate(
+      [
+        { transform: `translateX(${was.left - this.toolRect.left}px) scaleX(${was.width / this.toolRect.width})`, transformOrigin: "left" },
+        { transform: "none", transformOrigin: "left" },
+      ],
+      { duration: 240, easing: "cubic-bezier(.2,1.1,.3,1)", pseudoElement: "::before" },
+    );
+  }
+
   private renderBar() {
+    const opening = this.open && this.bar.hidden;
     this.bar.hidden = !this.open;
-    if (!this.open) return;
+    if (!this.open) {
+      this.toolRect = null;
+      return;
+    }
+    if (opening) {
+      this.bar.classList.add("opening");
+      setTimeout(() => this.bar.classList.remove("opening"), 650);
+    }
     const u = this.unsent().length;
     const d = this.done().length;
     const copy = this.transport.kind === "clipboard";
@@ -690,7 +821,7 @@ export class Annotator {
             ? sorted
                 .map(
                   (n) =>
-                    `<li data-note="${esc(n.id)}" tabindex="0"><span class="dot ${n.status}">${n.status === "resolved" ? "✓" : n.n}</span><span class="ltext">${esc(n.comment)}</span><span class="lstate">${n.route !== this.route ? esc(n.route) + " · " : ""}${esc(this.stateLabel(n))}</span></li>`,
+                    `<li data-note="${esc(n.id)}" tabindex="0"><span class="dot ${n.status}${digits(n.n)}">${n.status === "resolved" ? "✓" : n.n}</span><span class="ltext">${esc(n.comment)}</span><span class="lstate">${n.route !== this.route ? esc(n.route) + " · " : ""}${esc(this.stateLabel(n))}</span></li>`,
                 )
                 .join("")
             : '<li class="empty">No notes yet. Pick Pin, Element or Area.</li>'
@@ -698,38 +829,48 @@ export class Annotator {
         (sorted.length
           ? this.confirming
             ? `<div class="confirm" role="alertdialog" aria-label="Clear all notes"><p>Delete all ${plural(sorted.length, "note")}? This can't be undone.</p><button type="button" class="btn" data-act="keep">Keep</button><button type="button" class="btn primary" data-act="clear-all">Clear all</button></div>`
-            : '<div class="lfoot"><button type="button" class="btn ghost danger" data-act="confirm-clear">Clear all…</button></div>'
+            : '<div class="lfoot"><button type="button" class="btn danger" data-act="confirm-clear">Clear all…</button></div>'
           : "")
       : "";
     const busy = this.busyText();
-    this.bar.innerHTML =
+    const barHtml =
       `<div class="tools">${tool("pin")}${tool("element")}${tool("area")}<span class="sep"></span>` +
       `<button type="button" class="tool${this.listOpen ? " on" : ""}" data-act="list" aria-pressed="${this.listOpen}" title="All notes" aria-label="All notes">${ICON.list}${this.notes.length}</button>` +
       `<button type="button" class="tool icon${this.showMarks ? "" : " on"}" data-act="marks" title="${this.showMarks ? "Hide marks" : "Show marks"}" aria-label="${this.showMarks ? "Hide marks" : "Show marks"}">${this.showMarks ? ICON.eye : ICON.eyeOff}</button><span class="sep"></span>` +
-      `<button type="button" class="tool" data-act="clear-done" ${d ? "" : "disabled"} title="Remove notes that are done">Clear done${d ? `<span class="count">${d}</span>` : ""}</button>` +
-      `<span class="split"><button type="button" class="send" data-act="send" ${canSend ? "" : "disabled"} title="${copy ? "Copy unsent notes to the clipboard" : to ? `Send unsent notes to ${esc(to.label)}` : this.transport.sends ? "Send unsent notes to your agent" : "No agent connection"}">${this.busy ? (copy ? "Copying…" : "Sending…") : copy ? "Copy" : to ? `<span class="to">Send to ${esc(to.label)}</span>` : "Send"}${u ? `<span class="count">${u}</span>` : ""}</button>` +
+      `<button type="button" class="tool" data-act="clear-done" ${d ? "" : "disabled"} title="Remove notes that are done">Clear done<span class="count">${d}</span></button>` +
+      `<span class="split"><button type="button" class="send" data-act="send" ${canSend ? "" : "disabled"} title="${copy ? "Copy unsent notes to the clipboard" : to ? `Send unsent notes to ${esc(to.label)}` : this.transport.sends ? "Send unsent notes to your agent" : "No agent connection"}">${copy ? "Copy" : to ? `<span class="to">Send to ${esc(to.label)}</span>` : "Send"}<span class="count">${u}</span></button>` +
       (to ? `<button type="button" class="send more" data-act="pick" ${canSend ? "" : "disabled"} aria-label="Send to another agent" aria-expanded="${!!this.picking}" title="Send to another agent">${ICON.caret}</button>` : "") +
       `</span>` +
       `<span class="slot"><slot name="controls"></slot></span></div>` +
-      (busy ? `<div class="busy" role="status"><i class="spinner"></i><span>${esc(busy)}</span></div>` : "") +
-      `<div class="status" role="status">${esc(this.statusText())}</div>` +
-      list;
+      `<div class="rows">` +
+      (busy && !(this.needsAgent() && this.unheardOnly()) ? `<div class="busy" role="status"><i class="spinner"></i><span>${esc(busy)}</span></div>` : "") +
+      `<div class="status"><span role="status">${esc(this.statusText())}</span>${this.needsAgent() ? this.copyHtml() : ""}</div>` +
+      list +
+      `</div>`;
+    if (barHtml !== this.barHtml) {
+      this.barHtml = barHtml;
+      this.bar.innerHTML = barHtml;
+    }
     this.placeBar();
+    this.slideTool();
   }
 
   private launcherXY() {
-    const r = this.launcher.getBoundingClientRect();
-    return { x: r.left, y: r.top, w: r.width || 44, h: r.height || 44 };
+    const l = this.launcher;
+    return { x: l.offsetLeft, y: l.offsetTop, w: l.offsetWidth || 44, h: l.offsetHeight || 44 };
   }
 
   private placeBar() {
     const { x, y, w, h } = this.launcherXY();
     const s = this.bar.style;
     s.top = s.bottom = s.left = s.right = "";
-    if (y < innerHeight / 2) s.top = y + h + 10 + "px";
-    else s.bottom = innerHeight - y + 10 + "px";
-    if (x > innerWidth / 2) s.right = Math.max(8, innerWidth - x - w) + "px";
-    else s.left = Math.max(8, x) + "px";
+    const above = y >= innerHeight / 2;
+    this.bar.classList.toggle("up", above);
+    if (above) s.bottom = innerHeight - y + 10 + "px";
+    else s.top = y + h + 10 + "px";
+    const side = x > innerWidth / 2 ? Math.max(8, innerWidth - x - w) : Math.max(8, x);
+    s[x > innerWidth / 2 ? "right" : "left"] = side + "px";
+    s.maxWidth = `calc(100vw - ${side + 8}px)`;
   }
 
   private placeLauncher() {
@@ -757,7 +898,7 @@ export class Annotator {
   }
 
   private renderLayer() {
-    const on = this.open && (!!this.mode || !!this.panel);
+    const on = !!this.panel || (this.open && !!this.mode);
     this.layer.hidden = !on;
     if (!on || this.panel) this.hoverBox.hidden = true;
   }
@@ -853,7 +994,7 @@ export class Annotator {
     if (n.status === "open")
       this.panelEl.innerHTML =
         head +
-        `<textarea class="input" rows="4" placeholder="What should change here?" aria-label="Note">${esc(n.comment)}</textarea><div class="foot">${isNew ? "" : '<button type="button" class="btn ghost danger" data-act="delete">Delete</button>'}<span class="hint">⌘↵ to save</span><button type="button" class="btn primary" data-act="save">Save</button></div>`;
+        `<textarea class="input" rows="4" placeholder="What should change here?" aria-label="Note">${esc(n.comment)}</textarea><div class="foot">${isNew ? "" : `<button type="button" class="btn trash danger" data-act="delete" aria-label="Delete note" title="Delete note">${ICON.trash}</button>`}<span class="hint">⌘↵ to save</span><button type="button" class="btn primary" data-act="save">Save</button></div>`;
     else {
       const progress =
         n.status === "working"
@@ -864,15 +1005,15 @@ export class Annotator {
               : this.unheard(n)
                 ? this.offers
                   ? `Sent at ${clock(n.sentAt)}. No agent has it yet.`
-                  : `Sent at ${clock(n.sentAt)}. No agent is attached yet; ask yours to run ${this.watchCmd()}`
+                  : `Sent at ${clock(n.sentAt)}. No agent is attached yet.`
                 : `Sent to ${this.who()} at ${clock(n.sentAt)}, waiting for ${this.who()} to pick it up.`
             : "";
       this.panelEl.innerHTML =
         head +
         `<p class="comment">${esc(n.comment)}</p>` +
         (n.reply && n.status === "resolved" ? `<div class="reply"><b>${esc(this.agentName() ?? "Agent")}</b>${esc(n.reply)}</div>` : "") +
-        (progress ? `<p class="waiting" role="status"><i class="spinner"></i><span>${esc(progress)}</span></p>` : "") +
-        `<div class="foot"><button type="button" class="btn ghost danger" data-act="delete">Delete</button><span class="hint"></span>${
+        (progress ? `<div class="waiting"><i class="spinner"></i><span role="status">${esc(progress)}</span>${this.unheard(n) && !this.offers ? this.copyHtml() : ""}</div>` : "") +
+        `<div class="foot"><button type="button" class="btn trash danger" data-act="delete" aria-label="Delete note" title="Delete note">${ICON.trash}</button><span class="hint"></span>${
           n.status === "resolved"
             ? '<button type="button" class="btn" data-act="reopen">Reopen</button>'
             : this.offers && this.unheard(n)
@@ -1072,7 +1213,7 @@ export class Annotator {
         this.flash(
           res.delivery?.ok || res.watching
             ? `Sent ${plural(res.sent, "note")}${via || ` to ${this.who()}`}.`
-            : `Sent ${plural(res.sent, "note")}${via}. No agent is attached yet; ask yours to run ${this.watchCmd()}`,
+            : `Sent ${plural(res.sent, "note")}${via}. No agent is attached yet.`,
         );
       }
     } catch (e) {
@@ -1128,7 +1269,10 @@ export class Annotator {
         return;
       }
       const el = elementAt(e.clientX, e.clientY, this.host);
-      if (!el) return;
+      if (!el) {
+        this.flash("Nothing here to note · click on part of the page");
+        return;
+      }
       const r = rectOf(el);
       if (this.mode === "pin") this.openPanel(this.newNote("pin", el, e.clientX, e.clientY), true, el);
       else if (this.mode === "element") this.openPanel(this.newNote("element", el, r.left, r.top), true, el);
@@ -1159,7 +1303,6 @@ export class Annotator {
       const n = this.notes.find((x) => x.id === m.dataset.id);
       if (!n) return;
       if (this.panel && this.isDirty()) return this.nudge();
-      if (!this.open) this.toggleOpen();
       this.openPanel(n, false);
     });
 
@@ -1182,6 +1325,7 @@ export class Annotator {
         return;
       }
       const a = b.dataset.act;
+      if (a === "copy-prompt") return void this.copyPrompt(b);
       if (a === "list") {
         this.listOpen = !this.listOpen;
         this.confirming = false;
@@ -1223,6 +1367,7 @@ export class Annotator {
 
     this.panelEl.addEventListener("click", (e) => {
       const b = (e.target as Element).closest<HTMLButtonElement>("[data-act]");
+      if (b?.dataset.act === "copy-prompt") return void this.copyPrompt(b);
       if (b && !b.disabled) this.panelAction(b.dataset.act!);
     });
     this.panelEl.addEventListener("input", () => this.syncSave());
