@@ -152,8 +152,8 @@ textarea.input::placeholder{color:var(--aa-muted)}
 .list li:focus-visible{outline:2px solid var(--aa-accent);outline-offset:-2px}
 .phead{padding:8px 12px 2px;font-size:11px;font-weight:600;color:var(--aa-muted);border-top:1px solid var(--aa-divider)}
 .pick{border-top:0}
-.list li.empty{color:var(--aa-muted);cursor:default}
-.list li.empty:hover{background:none}
+.list li.empty,.list li.gone{color:var(--aa-muted);cursor:default}
+.list li.empty:hover,.list li.gone:hover{background:none}
 .dot{flex:none;width:20px;height:20px;padding:0;font-size:10.5px;font-weight:700;line-height:20px;text-align:center;color:var(--aa-on-accent);background:${GRADIENT};border-radius:50%}
 .ltext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lstate{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--aa-muted)}
