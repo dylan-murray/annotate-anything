@@ -98,7 +98,7 @@ export class Annotator {
   private mode: Mode | null = null;
   private listOpen = false;
   private confirming = false;
-  private picking: Target[] | null = null;
+  private picking: (Target & { gone?: boolean })[] | null = null;
   private targets: Target[] = [];
   private panel: Panel | null = null;
   private drawing: { x0: number; y0: number; x1: number; y1: number } | null = null;
@@ -817,7 +817,7 @@ export class Annotator {
             ? this.picking
                 .map(
                   (t) =>
-                    `<li data-target="${esc(t.id)}" tabindex="0"${t.id === to?.id ? ' aria-current="true"' : ""}><span class="ltext">${esc(t.label)}</span>${t.detail ? `<span class="lstate">${esc(t.detail)}</span>` : ""}${t.id === to?.id ? `<span class="current">${ICON.check}</span>` : ""}</li>`,
+                    `<li data-target="${esc(t.id)}"${t.gone ? ' class="gone" aria-disabled="true"' : ' tabindex="0"'}${t.id === to?.id ? ' aria-current="true"' : ""}><span class="ltext">${esc(t.label)}</span>${t.gone ? '<span class="lstate">closed</span>' : t.detail ? `<span class="lstate">${esc(t.detail)}</span>` : ""}${t.id === to?.id ? `<span class="current">${ICON.check}</span>` : ""}</li>`,
                 )
                 .join("")
             : '<li class="empty">Loading agents…</li>'
@@ -1164,7 +1164,7 @@ export class Annotator {
     const order = (list: Target[]) => [...list].sort((a, b) => Number(b.id === last) - Number(a.id === last));
     const focusRow = (id?: string) =>
       (this.bar.querySelector<HTMLElement>(`li[data-target="${CSS.escape(id ?? "")}"]`) ?? this.bar.querySelector<HTMLElement>("li[data-target]"))?.focus();
-    // Show the agents already known at once; the fresh list replaces them when it arrives.
+    // Show the agents already known at once. When the fresh list arrives, every row on screen keeps its place, so a click aimed at one can't land on another: agents that closed stay greyed out, and new ones go on the side away from the bar.
     this.picking = order(this.targets);
     this.renderBar();
     focusRow();
@@ -1183,7 +1183,10 @@ export class Annotator {
       return this.send();
     }
     const focused = (this.shadow.activeElement as HTMLElement | null)?.dataset?.target;
-    this.picking = order(targets);
+    const fresh = new Map(targets.map((t) => [t.id, t]));
+    const kept = this.picking.map((t) => fresh.get(t.id) ?? { ...t, gone: true });
+    const added = order(targets).filter((t) => !this.picking!.some((p) => p.id === t.id));
+    this.picking = this.bar.classList.contains("up") ? [...added, ...kept] : [...kept, ...added];
     this.renderBar();
     focusRow(focused);
   }
@@ -1331,6 +1334,7 @@ export class Annotator {
       }
       if (b.dataset.target !== undefined) {
         const t = this.picking?.find((x) => x.id === b.dataset.target);
+        if (t?.gone) return;
         this.picking = null;
         if (t) {
           write(this.keys.target, t.id);

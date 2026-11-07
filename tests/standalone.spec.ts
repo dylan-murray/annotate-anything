@@ -152,6 +152,43 @@ test("when the server offers agents, Send asks which one and says where the note
   expect((await (await request.get("http://localhost:5197/delivered")).json()).at(-1).prompt).toContain("Second note");
 });
 
+test("rows already in the Send to list stay put when the fresh list arrives", async ({ page, request }) => {
+  fs.rmSync(process.env.AA_TEST_DIR + "-static-agents", { recursive: true, force: true });
+  const ui = { id: "ui", label: "UI agent", detail: "fixture · Claude" };
+  const api = { id: "api", label: "API agent" };
+  const docs = { id: "docs", label: "Docs agent" };
+  let calls = 0;
+  let release = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route("**/__agents/targets", async (route) => {
+    if (calls++ === 0) return route.fulfill({ json: { targets: [api, ui] } });
+    await held;
+    await route.fulfill({ json: { targets: [docs, ui] } });
+  });
+  await page.goto("http://localhost:5197/agents");
+  const host = page.locator("annotate-anything");
+  await host.locator(".launcher").click();
+  await expect.poll(() => calls).toBe(1);
+  await host.locator(".tool[data-mode=element]").click();
+  const b = (await page.locator("#headline").boundingBox())!;
+  await page.mouse.click(b.x + 20, b.y + b.height / 2);
+  await page.keyboard.type("Aimed at the UI agent");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await host.locator(".send").click();
+  const rows = host.locator("li[data-target]");
+  await expect(rows).toHaveText([/API agent/, /UI agent/]);
+  const aim = (await rows.nth(1).boundingBox())!;
+  await page.mouse.move(aim.x + aim.width / 2, aim.y + aim.height / 2);
+  release();
+  await expect(rows).toHaveText([/Docs agent/, /API agent\s*closed/, /UI agent/]);
+  expect(await host.locator('li[data-target="ui"]').boundingBox()).toEqual(aim);
+  await host.locator('li[data-target="api"]').click();
+  await expect(host.locator(".pick")).toHaveCount(1);
+  await page.mouse.click(aim.x + aim.width / 2, aim.y + aim.height / 2);
+  await expect(host.locator(".toolbar .status")).toContainText("Sent 1 note to UI agent.");
+  expect((await (await request.get("http://localhost:5197/delivered")).json()).at(-1).target).toBe("ui");
+});
+
 test("a host that offers agents says so, and each note keeps the agent it went to", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-picks-"));
   const get = async (core: ReturnType<typeof createCore>) =>
