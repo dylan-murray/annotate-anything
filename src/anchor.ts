@@ -288,6 +288,9 @@ export function find(note: Note, host: Element, attrs: string[]): Element | null
     }
   }
   if (byText) return byText;
+  // A dialog's markup is often shared with others built the same way, so a note made in one only
+  // returns to an element that still agrees with it, never to whatever now sits in the same spot.
+  if (note.inDialog) return near && agrees(near) ? near : null;
   if (sized(bySelector)) return bySelector;
   return near;
 }

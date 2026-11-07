@@ -240,6 +240,37 @@ for (const kind of ["drawer", "radix", "native"] as const) {
   });
 }
 
+test("a note made in a dialog never shows up in a different dialog built the same way", async ({ page }) => {
+  await load(page);
+  const t = ui(page);
+  const make = (title: string, body: string) =>
+    page.evaluate(
+      ([title, body]) => {
+        const d = document.createElement("dialog");
+        d.className = "made";
+        d.innerHTML = `<form method="dialog"><h2>${title}</h2><p>${body}</p><button>Done</button></form>`;
+        document.body.append(d);
+        d.showModal();
+      },
+      [title, body],
+    );
+  const drop = () => page.evaluate(() => document.querySelectorAll("dialog.made").forEach((d) => ((d as HTMLDialogElement).close(), d.remove())));
+  await make("Rename desk", "Pick a new name for this desk.");
+  await note(page, "element", page.locator("dialog.made h2"), "Say which desk");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(t.mark(1)).toBeVisible();
+  await drop();
+  await expect(t.mark(1)).toBeHidden();
+  await make("Delete session", "This stops the agent and closes its terminal.");
+  await expect(page.locator("dialog.made h2")).toHaveText("Delete session");
+  await page.waitForTimeout(300);
+  await expect(t.mark(1)).toBeHidden();
+  await drop();
+  await make("Rename desk", "Pick a new name for this desk.");
+  await expect(t.mark(1)).toBeVisible();
+});
+
 test("page marks stay hidden behind an open dialog", async ({ page }) => {
   await load(page);
   const t = ui(page);
